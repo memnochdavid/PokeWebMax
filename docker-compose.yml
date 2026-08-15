@@ -1,0 +1,39 @@
+services:
+  database:
+    image: mariadb:11
+    container_name: pokewebmax_db
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: pokewebmax
+      MARIADB_USER: pokewebmax
+      MARIADB_PASSWORD: pokewebmax
+      MARIADB_ROOT_PASSWORD: root
+    ports:
+      - "3307:3306"
+    volumes:
+      - pokewebmax_db_data:/var/lib/mysql
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend.Dockerfile
+    container_name: pokewebmax_backend
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8001:8000"
+    depends_on:
+      - database
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/frontend.Dockerfile
+    container_name: pokewebmax_frontend
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "5174:5173"
+
+volumes:
+  pokewebmax_db_data:
