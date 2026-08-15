@@ -1,0 +1,39 @@
+.statusRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+}
+
+.dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dotOk {
+  background: #22c55e;
+}
+
+.dotError {
+  background: #ef4444;
+}
+
+.dotPending {
+  background: #a1a1aa;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.value {
+  font-size: 0.85rem;
+  opacity: 0.75;
+}

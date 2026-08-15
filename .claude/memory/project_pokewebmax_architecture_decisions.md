@@ -37,6 +37,14 @@ metadata:
    colisión: backend `8001`, frontend `5174`, MariaDB `3307` (ZenPaw usa 8000/5173/3306).
    Contenedores con prefijo `pokewebmax_` en vez de `zenpaw_`.
 
+7. **React: custom hooks obligatorios para lógica de datos.** Ningún componente `.jsx`
+   debe contener `useState`/`useEffect`/`useCallback`/llamadas a `axios` inline en su
+   cuerpo — esa lógica se extrae siempre a un hook propio en `src/hooks/useNombre.js`. El
+   componente se queda solo con composición y JSX. **Why:** máxima explícita de David
+   ("se deben usar hooks para no ensuciar el código"), tras ver el patrón aplicado en
+   `useServiceHealth.js` (extraído de `App.jsx`). **How to apply:** aplicar desde el
+   primer borrador de cualquier componente nuevo, no esperar a que lo señale.
+
 **How to apply (general):** antes de añadir cualquier dependencia o patrón "porque el
 Android lo tiene así", confirmar con David si ya toca esa fase — ver
 `project_pokewebmax_progress.md`.
