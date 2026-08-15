@@ -55,50 +55,101 @@ Consecuencias prácticas ya resueltas:
 proyecto, revisar primero si depende del bit +x o de chown/permisos reales — aquí hay que
 adaptarlo.
 
-## Cacheo manual de PokeAPI (v1) — HECHO 2026-08-15
+## Historial de iteraciones sobre el cacheo (superseded)
 
-Implementado y probado end-to-end (pikachu, charizard, y caso de error con nombre
-inexistente):
+Antes de llegar al diseño actual hubo varias vueltas en la misma sesión (2026-08-15): v1
+cacheaba un único Pokémon con upsert real hacia PokeAPI; luego se corrigió a "no tocar lo
+ya cacheado"; luego se probó un listado completo de Pokémon con botón de cacheo por-item
+en la propia lista. Todo eso quedó reemplazado por el diseño genérico de la sección
+siguiente — no hace falta detalle de esas versiones intermedias, solo el resultado final.
 
-- `symfony/http-client` instalado.
-- Entidad `App\Entity\PokemonCache` (tabla `pokemon_cache`): `id` (el id de PokeAPI, no
-  autoincrement), `name`, `spriteUrl`, `types` (columna JSON), `colorName`,
-  `generationId`, `fetchedAt`. **No incluye `evoChainLength`** — se dejó fuera de v1
-  deliberadamente (requeriría una 3ª llamada a `evolution-chain`), se añadirá cuando haga
-  falta de verdad.
-- `App\Service\PokeApi\PokeApiClient` — envuelve `HttpClientInterface`, dos métodos:
-  `fetchPokemon()` y `fetchSpecies()`, ambos contra PokeAPI v2. 404 → lanza
-  `PokemonNotFoundException` propia.
-- `App\Service\PokeApi\PokemonCacheMapper` — mapea el JSON crudo de `pokemon` +
-  `pokemon-species` a la entidad (upsert: recibe la entidad existente o crea una nueva).
-- `App\Command\CachePokemonCommand` (`app:cache:pokemon {idOrName}`) — disparador manual
-  por consola (el primero que existió; luego se añadió también el endpoint HTTP, ver
-  sección siguiente). Upsert por id, maneja 404 y errores de red con `Command::FAILURE`
-  en vez de excepción sin capturar.
-- Migración `Version20260815104132` aplicada.
+## Diseño final: caché genérica multi-recurso — HECHO 2026-08-15
 
-## Vista de cacheo desde el frontend — HECHO 2026-08-15
+David pidió examinar `DexterWeb` (proyecto anterior suyo, mismo planteamiento
+Symfony+React, repo en `github.com/memnochdavid/DexterWeb.git`) para ver qué reutilizar, y
+a raíz de eso decidió que **el objetivo ya no es cachear solo Pokémon, sino toda la
+PokeAPI** (~50 recursos). Esto llevó a repensar la arquitectura de caché desde cero — ver
+punto 8 de [[project_pokewebmax_architecture_decisions]] para el detalle completo. Resumen:
 
-- Lógica compartida extraída a `App\Service\PokeApi\PokemonCacheService::cache()`
-  (devuelve `PokemonCacheResult { entity, wasCached }`). El comando `app:cache:pokemon` se
-  refactorizó para usarlo — ya no duplica lógica.
-- Nuevo endpoint `POST /api/pokemon/cache/{idOrName}` (`PokemonCacheController`). 404 si
-  no existe en PokeAPI, 502 si PokeAPI no responde. Devuelve el Pokémon cacheado en JSON.
-- Frontend: se introdujo **routing** (`react-router-dom`, `BrowserRouter` en `main.jsx`).
-  `App.jsx` pasó a ser el shell de navegación (nav + `<Routes>`), ya no contiene la vista
-  de estado directamente.
-  - `pages/StatusPage/` — la vista de salud que antes vivía en `App.jsx`, movida tal cual.
-  - `pages/CachePokemonPage/` — vista nueva: formulario (input + submit) que llama al
-    endpoint, muestra sprite/nombre/tipos o el error. Toda la lógica de estado/petición
-    vive en `hooks/useCachePokemon.js` (incluyendo el propio valor del input) — el
-    componente es JSX puro, según `[[project_pokewebmax_architecture_decisions]]` punto 7.
+- **Una sola tabla genérica** `pokeapi_resource_cache` (`App\Entity\PokeApiResourceCache`):
+  `resourceType` + `resourceId` + `name` + `payload` (JSON crudo de PokeAPI, sin parsear a
+  columnas propias) + `fetchedAt`. Índice único `(resourceType, resourceId)`. Sustituye a
+  la antigua `pokemon_cache` (borrada en la misma migración, `Version20260815144432` —
+  solo tenía datos de prueba, sin pérdida real).
+- Todo el backend quedó parametrizado por `resourceType` en vez de duplicado por recurso:
+  `PokeApiClient::fetchResource()`/`fetchResourceList()`, `PokeApiCacheService::cache()`
+  (sigue sin hacer upsert — si ya existe no vuelve a PokeAPI), `PokeApiListService::listAll()`
+  (deliberadamente ligero: solo `id/name/cached/fetchedAt`, sin `payload`, porque algunos
+  recursos tienen miles de entradas — `item` ~2100, `pokemon-form` ~2000). Endpoints:
+  `GET /api/pokeapi/{resourceType}`, `POST /api/pokeapi/{resourceType}/cache/{idOrName}`.
+  Comando: `app:cache:resource {resourceType} {idOrName}`.
+- Se borraron todos los archivos específicos de Pokémon del diseño anterior
+  (`PokemonCache`, `PokemonCacheRepository`, `PokemonCacheMapper`, `PokemonCacheService`,
+  `PokemonCacheResult`, `PokemonListService`, `PokemonCacheController`,
+  `PokemonListController`, `CachePokemonCommand`, `PokemonNotFoundException` → renombrada a
+  `ResourceNotFoundException`, ahora genérica).
+- **Primero se activaron 5 recursos "grandes"** (`pokemon-species`, `move`, `item`,
+  `berry`, `ability`), pero David pidió después "añade todo" — **los 49 recursos reales
+  de PokeAPI tienen ahora botón de cacheo masivo** (todo salvo `meta`, que es solo info
+  de deploy de la API, no un recurso de dominio). Esto fue trivial gracias al diseño
+  genérico: no hizo falta ninguna entidad/migración nueva, solo listar los 49
+  `resourceType` en el frontend.
+- Frontend: vista **Cachear** (`CacheAllPage`) agrupa los 49 recursos en 10 secciones
+  (Pokémon, Movimientos, Ítems, Bayas, Ubicaciones, Encuentros, Evolución, Concursos,
+  Partidas, Utilidad — mismo agrupado que la doc oficial de PokeAPI), cada uno con su fila
+  de botón+progreso independiente. El array de recursos vive en
+  `frontend/src/utils/pokeApiResources.js` (`RESOURCE_GROUPS`) — es la única fuente de
+  verdad de "qué recursos tiene la app", añadir uno nuevo es solo añadir una línea ahí.
+  `hooks/useCacheAllResource.js` generalizado (recibe `resourceType`).
+- Vista **Pokémon** (`PokemonListPage`) consume `GET /api/pokeapi/pokemon-species`; el
+  sprite se deriva por **URL determinista** (`.../official-artwork/{id}.png`, sin
+  payload) — pero **perdió el campo "tipos"** en la card, porque `pokemon-species` no lo
+  tiene (vive en el recurso `pokemon`, que sí está cacheable ahora pero no se usa todavía
+  en esta vista). Pendiente si se quiere recuperar.
+- **Bug encontrado y arreglado en la misma sesión**: `PokeApiListService::listAll()`
+  cargaba las entidades completas (con el `payload` JSON entero) solo para saber qué
+  estaba cacheado — con 1025 Pokémon (~28MB) + cientos de Movimientos ya cacheados, la
+  hidratación de Doctrine agotaba el `memory_limit` de PHP (128MB) y el listado devolvía
+  "Error inesperado." en el frontend. Arreglado con
+  `PokeApiResourceCacheRepository::findFetchedAtByType()`, que solo trae
+  `resourceId`+`fetchedAt` vía `getArrayResult()` (sin hidratar entidades, sin tocar
+  `payload`). **Why importante:** con el diseño genérico y recursos de miles de filas
+  (`item` ~2200, `location-area` ~1500), cualquier query futura sobre esta tabla debe
+  evitar cargar `payload` a menos que se necesite explícitamente esa ficha — es la
+  columna cara.
+- **5 recursos sin campo `name`** en PokeAPI (ni en el detalle ni en el listado, solo
+  `id`): `contest-effect`, `super-contest-effect`, `evolution-chain`, `machine`,
+  `characteristic`. `PokeApiClient`/`PokeApiCacheService` usan un nombre sintético
+  `{resourceType}-{id}` (ej. `"evolution-chain-1"`) como fallback — sin este fallback el
+  cacheo de estos 5 fallaba con TypeError (`setName(null)`).
+- Verificado con `curl`: los 49 recursos listan y cachean correctamente, incluidos los 5
+  "sin nombre" y el bug de memoria confirmado arreglado (`pokemon-species` 1025/1025 sin
+  error). Frontend sirve `/cache` sin errores de import. **No verificado a ojo en
+  navegador** en ningún momento de esta sesión (Chrome no conectado,
+  `claude-in-chrome` sin configurar).
+
+**Nota de seguridad (no accionada, solo registrada):** al revisar `DexterWeb` (proyecto
+anterior de David, mismo planteamiento) se encontró `backend/config/jwt/private.pem` + su
+passphrase en claro en `backend/.env`, commiteados en un repo público de GitHub — clave
+privada JWT expuesta. Es un proyecto distinto a PokeWebMax y no se ha tocado; David fue
+avisado en la conversación pero no ha pedido rotarla/purgarla todavía.
 
 ## Pendiente / siguiente paso natural
 
-- `evoChainLength` y datos de "ficha completa" (stats, habilidades, movimientos) quedan
-  fuera de esta v1.
-- Cacheo por lotes/rango (ej. una generación entera) fue descartado para v1 a propósito,
-  podría ser una iteración futura.
-- No hay endpoint de **lectura/listado** todavía (`GET /api/pokemon`) — solo se puede
-  cachear uno a uno y ver el resultado puntual devuelto por la propia petición POST. Ver
-  la tabla completa hoy solo es posible por SQL directo o `bin/console`.
+- No hay vistas de listado/detalle navegable para ningún recurso salvo Pokémon — el resto
+  (49 recursos) solo tienen el botón de cacheo masivo en `/cache`, sin forma de ver el
+  contenido cacheado desde el frontend (solo por SQL directo o `bin/console`).
+- El cacheo masivo es secuencial (uno a uno) — con recursos grandes (`item` ~2200,
+  `location-area` ~1500, `machine` ~2370) puede tardar bastante; paralelizar con un
+  límite de concurrencia sería la siguiente mejora natural si se nota lento en la
+  práctica.
+- La vista Pokémon perdió el campo "tipos" al pasar a `pokemon-species` (ver arriba) — se
+  podría recuperar ahora que `pokemon` también es cacheable, cruzando ambos recursos.
+- Ninguna vista tiene paginación — con todo cacheado serían miles de cards de golpe en
+  varios recursos.
+- Cualquier código nuevo que consulte `PokeApiResourceCache` en bloque debe usar
+  proyecciones ligeras (como `findFetchedAtByType`) y no `findBy`/`findAll` completos, por
+  el bug de memoria de esta sesión.
+- De `DexterWeb` (revisado esta sesión) queda por traer si se quiere: iconos SVG de tipo +
+  `typeColors.js`, y el patrón de `PokeApiService` con parseo recursivo de cadena
+  evolutiva + traducción por idioma, útil para cuando se aborde la "ficha completa".

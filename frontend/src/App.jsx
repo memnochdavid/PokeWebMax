@@ -1,6 +1,7 @@
 import { NavLink, Route, Routes } from 'react-router-dom'
 import StatusPage from './pages/StatusPage/StatusPage.jsx'
-import CachePokemonPage from './pages/CachePokemonPage/CachePokemonPage.jsx'
+import CacheAllPage from './pages/CacheAllPage/CacheAllPage.jsx'
+import PokemonListPage from './pages/PokemonListPage/PokemonListPage.jsx'
 import styles from './App.module.css'
 
 const navLinkClassName = ({ isActive }) => (isActive ? styles.navActive : undefined)
@@ -13,14 +14,18 @@ function App() {
           Estado
         </NavLink>
         <NavLink to="/cache" className={navLinkClassName}>
-          Cachear Pokémon
+          Cachear
+        </NavLink>
+        <NavLink to="/pokemon" className={navLinkClassName}>
+          Pokémon
         </NavLink>
       </nav>
 
       <main className={styles.main}>
         <Routes>
           <Route path="/" element={<StatusPage />} />
-          <Route path="/cache" element={<CachePokemonPage />} />
+          <Route path="/cache" element={<CacheAllPage />} />
+          <Route path="/pokemon" element={<PokemonListPage />} />
         </Routes>
       </main>
     </div>
