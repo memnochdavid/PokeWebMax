@@ -28,8 +28,10 @@ metadata:
 - `scripts/init.sh` + `migrate.sh` + `make_migration.sh` + `clear_cache.sh` creados y
   `init.sh` probado end-to-end con éxito (los 3 contenedores arriba, backend responde 404
   esperado, frontend 200).
-- Repo git **NO inicializado todavía** — a diferencia de ZenPaw, aquí no se ha hecho
-  `git init` ni se ha pedido. No lo hagas sin que lo pida explícitamente.
+- Repo git inicializado, remoto `origin` → `github.com/memnochdavid/PokeWebMax.git`, rama
+  `master`. A fecha de esta nota hay cambios sin commitear (todo lo de esta sesión: la
+  entidad/servicio de caché, el endpoint, y el frontend con routing) — David gestiona sus
+  propios commits, no crear commits sin que lo pida explícitamente.
 
 ## Hallazgo importante: filesystem fuseblk
 
@@ -53,9 +55,50 @@ Consecuencias prácticas ya resueltas:
 proyecto, revisar primero si depende del bit +x o de chown/permisos reales — aquí hay que
 adaptarlo.
 
+## Cacheo manual de PokeAPI (v1) — HECHO 2026-08-15
+
+Implementado y probado end-to-end (pikachu, charizard, y caso de error con nombre
+inexistente):
+
+- `symfony/http-client` instalado.
+- Entidad `App\Entity\PokemonCache` (tabla `pokemon_cache`): `id` (el id de PokeAPI, no
+  autoincrement), `name`, `spriteUrl`, `types` (columna JSON), `colorName`,
+  `generationId`, `fetchedAt`. **No incluye `evoChainLength`** — se dejó fuera de v1
+  deliberadamente (requeriría una 3ª llamada a `evolution-chain`), se añadirá cuando haga
+  falta de verdad.
+- `App\Service\PokeApi\PokeApiClient` — envuelve `HttpClientInterface`, dos métodos:
+  `fetchPokemon()` y `fetchSpecies()`, ambos contra PokeAPI v2. 404 → lanza
+  `PokemonNotFoundException` propia.
+- `App\Service\PokeApi\PokemonCacheMapper` — mapea el JSON crudo de `pokemon` +
+  `pokemon-species` a la entidad (upsert: recibe la entidad existente o crea una nueva).
+- `App\Command\CachePokemonCommand` (`app:cache:pokemon {idOrName}`) — disparador manual
+  por consola (el primero que existió; luego se añadió también el endpoint HTTP, ver
+  sección siguiente). Upsert por id, maneja 404 y errores de red con `Command::FAILURE`
+  en vez de excepción sin capturar.
+- Migración `Version20260815104132` aplicada.
+
+## Vista de cacheo desde el frontend — HECHO 2026-08-15
+
+- Lógica compartida extraída a `App\Service\PokeApi\PokemonCacheService::cache()`
+  (devuelve `PokemonCacheResult { entity, wasCached }`). El comando `app:cache:pokemon` se
+  refactorizó para usarlo — ya no duplica lógica.
+- Nuevo endpoint `POST /api/pokemon/cache/{idOrName}` (`PokemonCacheController`). 404 si
+  no existe en PokeAPI, 502 si PokeAPI no responde. Devuelve el Pokémon cacheado en JSON.
+- Frontend: se introdujo **routing** (`react-router-dom`, `BrowserRouter` en `main.jsx`).
+  `App.jsx` pasó a ser el shell de navegación (nav + `<Routes>`), ya no contiene la vista
+  de estado directamente.
+  - `pages/StatusPage/` — la vista de salud que antes vivía en `App.jsx`, movida tal cual.
+  - `pages/CachePokemonPage/` — vista nueva: formulario (input + submit) que llama al
+    endpoint, muestra sprite/nombre/tipos o el error. Toda la lógica de estado/petición
+    vive en `hooks/useCachePokemon.js` (incluyendo el propio valor del input) — el
+    componente es JSX puro, según `[[project_pokewebmax_architecture_decisions]]` punto 7.
+
 ## Pendiente / siguiente paso natural
 
-David quiere empezar por una función de **cacheo manual** desde PokeAPI v2 hacia la BD de
-Symfony (a diferencia del Android, que cachea automáticamente). Aún no se ha diseñado ni
-la entidad ni el comando/endpoint — es el siguiente paso a discutir con él, no asumir
-forma concreta todavía.
+- `evoChainLength` y datos de "ficha completa" (stats, habilidades, movimientos) quedan
+  fuera de esta v1.
+- Cacheo por lotes/rango (ej. una generación entera) fue descartado para v1 a propósito,
+  podría ser una iteración futura.
+- No hay endpoint de **lectura/listado** todavía (`GET /api/pokemon`) — solo se puede
+  cachear uno a uno y ver el resultado puntual devuelto por la propia petición POST. Ver
+  la tabla completa hoy solo es posible por SQL directo o `bin/console`.

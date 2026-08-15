@@ -1,24 +1,29 @@
-import StatusRow from './components/StatusRow/StatusRow.jsx'
-import useServiceHealth from './hooks/useServiceHealth.js'
+import { NavLink, Route, Routes } from 'react-router-dom'
+import StatusPage from './pages/StatusPage/StatusPage.jsx'
+import CachePokemonPage from './pages/CachePokemonPage/CachePokemonPage.jsx'
 import styles from './App.module.css'
 
+const navLinkClassName = ({ isActive }) => (isActive ? styles.navActive : undefined)
+
 function App() {
-  const { backend, database, retry } = useServiceHealth()
-
   return (
-    <main className={styles.page}>
-      <h1 className={styles.title}>PokeWebMax</h1>
+    <div className={styles.app}>
+      <nav className={styles.nav}>
+        <NavLink to="/" end className={navLinkClassName}>
+          Estado
+        </NavLink>
+        <NavLink to="/cache" className={navLinkClassName}>
+          Cachear Pokémon
+        </NavLink>
+      </nav>
 
-      <div className={styles.statusList}>
-        <StatusRow label="Frontend" state="ok" value="funcionando" />
-        <StatusRow label="Backend API" state={backend.state} value={backend.value} />
-        <StatusRow label="Base de datos" state={database.state} value={database.value} />
-      </div>
-
-      <button type="button" className={styles.retry} onClick={retry}>
-        Volver a comprobar
-      </button>
-    </main>
+      <main className={styles.main}>
+        <Routes>
+          <Route path="/" element={<StatusPage />} />
+          <Route path="/cache" element={<CachePokemonPage />} />
+        </Routes>
+      </main>
+    </div>
   )
 }
 
