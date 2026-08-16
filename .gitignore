@@ -14,3 +14,6 @@ frontend/public/animated/
 # Backup de la base de datos (scripts/dump_db.sh / restore_db.sh) — binario pesado que
 # no diffea bien en git, David lo pasa a mano entre máquinas/equipos.
 backup/
+
+# Dump de Wikidex
+scripts/wikidex_dump

@@ -649,41 +649,35 @@ bajo la cita ("Sin traducción de PokeAPI para este idioma en este juego") cuand
 versión activa no está traducida. Cuando el idioma seleccionado ES inglés, nunca se
 marca nada (siempre `translated: true` en ese caso).
 
-## Siguiente sesión: fallback a WikiDex para descripciones sin español
+## WikiDex: dump local ya obtenido por David + análisis hecho — CONTINÚA la siguiente sesión
 
-David quiere el siguiente paso: replicar en PokeWebMax el fallback que hace Dexter
-(Android) cuando PokeAPI no tiene la descripción en español de un juego (ver sección
-anterior — es justo el hueco que se acaba de mitigar a medias con el fallback
-por-versión a inglés). **Ya existe un doc de referencia detallado y ya copiado**:
-`docs/reference-android/wikidex-scraping-system.md` (322 líneas) — leerlo primero,
-ahorra re-investigar desde cero. Resumen de lo que dice:
+David quería el fallback que hace Dexter (Android) cuando PokeAPI no tiene la
+descripción en español de un juego (ver sección anterior — hueco mitigado a medias
+con el fallback por-versión a inglés). Doc de referencia:
+`docs/reference-android/wikidex-scraping-system.md`. **La preocupación de la sesión
+anterior sobre el `robots.txt` de WikiDex bloqueando `ClaudeBot` ya NO aplica**: David
+descargó él mismo, con su propio script `scripts/dump_wikidex.py` (API oficial de
+MediaWiki, no scraping de HTML), un dump completo de WikiDex a
+`scripts/wikidex_dump/` (sin commitear). Integrar esto es una importación **offline**
+desde disco local, sin peticiones en vivo a wikidex.net — la línea de "quién obtiene
+el dato" (ver sección de sprites HOME/animados) queda respetada igual que con los
+sprites: David lo obtuvo, Claude solo lee/usa lo que ya hay en disco.
 
-- **Problema documentado con tabla exacta**: PokeAPI en español solo cubre Gen VI-VIII
-  (X→Shield); Gen I-V, BDSP, Legends Arceus (parcial), Scarlet/Violet y Legends Z-A no
-  tienen español en PokeAPI. Coincide con lo que este proyecto verificó por curl esta
-  sesión (Bulbasaur: 8/28 entradas en español).
-- **Prioridad de fallback propuesta** (Android): PokeAPI-ES → WikiDex-ES (cacheado) →
-  PokeAPI-EN. Para ubicaciones/encuentros, WikiDex sería la fuente PRIMARIA (no
-  fallback) porque PokeAPI no tiene texto localizado ahí en absoluto.
-  - Es Kotlin/Room (Jsoup para el HTML, Room para cachear) — habrá que portar el
-    patrón a Symfony (HttpClient de Symfony en vez de Jsoup, un parser HTML en PHP —
-    ver qué hay disponible, quizá `symfony/dom-crawler`, y la tabla genérica
-    `pokeapi_resource_cache` no vale tal cual porque esto no es un recurso de
-    PokeAPI — probablemente haga falta una entidad Doctrine nueva específica para
-    WikiDex, a diferencia de la decisión 8/9 que es solo para lo que sí viene de
-    PokeAPI).
+**Claude ya examinó el dump a fondo (misma sesión 2026-08-16) y dejó un plan de
+integración concreto y accionable — ver
+[[project_pokewebmax_wikidex_dump_analysis]] antes de tocar nada de esto.** Resumen
+ultra-corto: el `title` de cada página de WikiDex coincide exacto con
+`species.names[es]` de PokeAPI (join sin mapeo manual), cada especie tiene un bloque
+`{{Pokédex}}` en wikitext con una entrada por juego (cubre justo Gen I-V/BDSP/Legends
+Arceus/Scarlet-Violet/Legends Z-A, el hueco real de PokeAPI-ES) más un bloque
+`{{Localización}}` con el mismo patrón, útil para la pestaña Ubicaciones pendiente.
+Falta escribir el parser de wikitext + una entidad Doctrine nueva (no la tabla
+genérica de PokeAPI) + comando de importación offline — todo el detalle técnico
+(claves de juego, alias, subplantillas, casos raros) está en esa nota, no hace falta
+re-abrir el dump de 446MB para recordarlo.
 
-**⚠️ Aviso importante para la siguiente sesión, léelo antes de escribir código:**
-el propio doc dice que el `robots.txt` de WikiDex **bloquea explícitamente
-`ClaudeBot`** (y `GPTBot`, y `/api/`) — y que el enfoque que usa el Android es sortear
-esto con un User-Agent de navegador genérico en las páginas wiki normales (no
-bloqueadas para user-agents genéricos, solo para bots nombrados). Antes de portar ese
-código a este proyecto, plantear esto explícitamente a David: escribir código que
-suplanta el User-Agent para evitar una regla de robots.txt que nombra a Claude
-específicamente es una línea distinta a "leer código que el usuario ya tiene" (ver
-[[project_pokewebmax_progress]] sección de los sprites HOME/animados, mismo tipo de
-situación pero con datos de texto en vez de assets con copyright — no asumir
-automáticamente que aplica el mismo razonamiento sin pararse a pensarlo primero).
+**Sesión cortada aquí** (David tuvo que irse) justo tras acordar el plan, antes de
+escribir código — la siguiente sesión puede arrancar directo por el parser.
 
 ## Pendiente / siguiente paso natural
 

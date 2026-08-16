@@ -1,0 +1,688 @@
+# Guía de uso del scraper offline de WikiDex
+
+## 1. Qué hace el script
+
+El script descarga los artículos de WikiDex mediante su API de MediaWiki y crea una copia local que puede utilizarse completamente offline.
+
+La estructura resultante es:
+
+```text
+wikidex_dump/
+├── wikidex.sqlite
+└── pages/
+    ├── Pikachu.json
+    ├── Bulbasaur.json
+    ├── Charizard.json
+    └── ...
+```
+
+La base de datos `wikidex.sqlite` es la parte más importante. Contiene:
+
+* Artículos.
+* Wikitext completo.
+* Título.
+* URL original.
+* ID de página.
+* ID de revisión.
+* Fecha de revisión.
+* Categorías.
+* Enlaces entre artículos.
+* Índice de búsqueda FTS5.
+
+Los JSON son copias individuales opcionales de cada artículo.
+
+> El script actual descarga únicamente la instalación española de WikiDex. No descarga automáticamente las versiones de otros idiomas.
+
+---
+
+## 2. Requisitos
+
+Necesitas Python 3.10 o superior.
+
+Comprueba la versión:
+
+```bash
+python --version
+```
+
+En algunos sistemas puede ser:
+
+```bash
+python3 --version
+```
+
+Instala `requests`:
+
+```bash
+python -m pip install requests
+```
+
+Si `python` no existe pero `python3` sí:
+
+```bash
+python3 -m pip install requests
+```
+
+---
+
+## 3. Guardar el script
+
+Guarda el código como:
+
+```text
+dump_wikidex.py
+```
+
+Por ejemplo:
+
+```text
+mi_proyecto/
+├── dump_wikidex.py
+└── ...
+```
+
+No es necesario crear manualmente `wikidex_dump`. El programa lo hará.
+
+---
+
+## 4. Primera prueba
+
+Antes de descargar todo WikiDex, conviene comprobar que la conexión y la API funcionan.
+
+Ejecuta:
+
+```bash
+python dump_wikidex.py --limit 20 --no-html
+```
+
+Esto descargará solamente 20 artículos.
+
+Deberías obtener:
+
+```text
+wikidex_dump/
+├── wikidex.sqlite
+└── pages/
+    ├── ...
+```
+
+Si utilizas `--no-html`, el script no hace una petición adicional para renderizar cada artículo.
+
+---
+
+## 5. Descarga completa recomendada
+
+Para el primer dump recomiendo:
+
+```bash
+python dump_wikidex.py --no-html --delay 1.0 --cooldown 15 --cooldown-every 50 --batch-size 25
+```
+
+Esto significa:
+
+* `--no-html`: no genera HTML.
+* `--delay 1.0`: espera un segundo entre peticiones.
+* `--cooldown 15`: realiza una pausa larga de 15 segundos.
+* `--cooldown-every 50`: hace esa pausa cada 50 peticiones.
+* `--batch-size 25`: solicita 25 artículos por lote.
+
+Es una configuración deliberadamente conservadora.
+
+No necesitas mantener el terminal abierto haciendo nada especial: simplemente deja que el proceso termine.
+
+---
+
+## 6. Si quieres guardar solamente SQLite
+
+Si los JSON no te interesan, puedes utilizar:
+
+```bash
+python dump_wikidex.py --no-html --no-json
+```
+
+El resultado será esencialmente:
+
+```text
+wikidex_dump/
+└── wikidex.sqlite
+```
+
+Para una aplicación offline, esta es probablemente la opción que recomiendo.
+
+La aplicación puede acceder directamente a SQLite y no necesita manejar decenas de miles de archivos.
+
+---
+
+## 7. Si quieres HTML
+
+El script permite solicitar HTML con:
+
+```bash
+python dump_wikidex.py --html
+```
+
+Sin embargo, **no recomiendo hacerlo durante el primer dump**.
+
+El HTML requiere una petición adicional por artículo, por lo que una descarga de decenas de miles de artículos se convierte en muchas más peticiones.
+
+Primero obtén:
+
+```text
+wikitext + metadatos
+```
+
+y posteriormente puedes crear un proceso separado para convertir/renderizar lo que necesites.
+
+---
+
+## 8. Qué ocurre si interrumpes el programa
+
+Puedes pulsar:
+
+```text
+Ctrl+C
+```
+
+El script conserva en SQLite los artículos que ya haya guardado.
+
+Por ejemplo:
+
+```text
+Descargados: 12.500
+```
+
+y después interrumpes el programa.
+
+Los 12.500 artículos permanecen en:
+
+```text
+wikidex_dump/wikidex.sqlite
+```
+
+### Importante
+
+La versión actual **vuelve a recorrer el listado de WikiDex desde el principio al reanudar**, aunque no vuelve a descargar los artículos cuya `revision_id` no haya cambiado cuando utilizas `--update`.
+
+Para reanudar:
+
+```bash
+python dump_wikidex.py --update --no-html
+```
+
+El programa comprobará las revisiones existentes y saltará los artículos que ya estén actualizados.
+
+---
+
+## 9. Qué pasa si aparece un error de conexión
+
+El script tiene reintentos automáticos.
+
+Por ejemplo, si WikiDex devuelve:
+
+```text
+HTTP 429
+```
+
+el script espera y vuelve a intentarlo.
+
+También maneja errores como:
+
+```text
+RemoteDisconnected
+ConnectionError
+Timeout
+HTTP 500
+HTTP 502
+HTTP 503
+HTTP 504
+```
+
+El tiempo de espera aumenta progresivamente mediante backoff.
+
+Por tanto, si aparece algo como:
+
+```text
+HTTP 429. Esperando 32.4s...
+```
+
+no es necesario intervenir.
+
+Simplemente deja que continúe.
+
+---
+
+## 10. Ajustar la velocidad
+
+Si quieres ser todavía más conservador:
+
+```bash
+python dump_wikidex.py \
+    --no-html \
+    --delay 2.0 \
+    --cooldown 30 \
+    --cooldown-every 25
+```
+
+Esto hará aproximadamente:
+
+```text
+petición
+↓
+2 segundos
+↓
+petición
+↓
+2 segundos
+↓
+...
+25 peticiones
+↓
+30 segundos
+↓
+continuar
+```
+
+Si todo funciona correctamente y quieres algo menos conservador:
+
+```bash
+python dump_wikidex.py \
+    --no-html \
+    --delay 0.75 \
+    --cooldown 15 \
+    --cooldown-every 50
+```
+
+No recomiendo empezar con valores agresivos.
+
+---
+
+## 11. Elegir otra ubicación
+
+Por defecto utiliza:
+
+```text
+./wikidex_dump/
+```
+
+Puedes elegir otra ubicación:
+
+```bash
+python dump_wikidex.py \
+    --output /ruta/wikidex \
+    --no-html
+```
+
+En Windows:
+
+```powershell
+python dump_wikidex.py --output "D:\wikidex" --no-html
+```
+
+El resultado será:
+
+```text
+D:\wikidex\
+├── wikidex.sqlite
+└── pages\
+    ├── Pikachu.json
+    ├── Bulbasaur.json
+    └── ...
+```
+
+---
+
+## 12. Consultar la base de datos
+
+Puedes abrir `wikidex.sqlite` con cualquier herramienta compatible con SQLite.
+
+También puedes acceder desde Python:
+
+```python
+import sqlite3
+
+db = sqlite3.connect(
+    "wikidex_dump/wikidex.sqlite"
+)
+
+row = db.execute("""
+    SELECT title, wikitext
+    FROM pages
+    WHERE title = ?
+""", ("Pikachu",)).fetchone()
+
+if row:
+    title, content = row
+
+    print(title)
+    print(content)
+
+db.close()
+```
+
+Esto funciona sin conexión a Internet.
+
+---
+
+## 13. Buscar artículos offline
+
+El script crea un índice FTS5.
+
+Puedes utilizarlo así:
+
+```python
+import sqlite3
+
+db = sqlite3.connect(
+    "wikidex_dump/wikidex.sqlite"
+)
+
+results = db.execute("""
+    SELECT title
+    FROM pages_fts
+    WHERE pages_fts MATCH ?
+    LIMIT 20
+""", ("Pikachu",)).fetchall()
+
+for title, in results:
+    print(title)
+
+db.close()
+```
+
+Esto permite que tu aplicación haga búsquedas sin conectarse a WikiDex.
+
+---
+
+## 14. Consultar categorías
+
+Las categorías se almacenan en una tabla independiente:
+
+```python
+import sqlite3
+
+db = sqlite3.connect(
+    "wikidex_dump/wikidex.sqlite"
+)
+
+categories = db.execute("""
+    SELECT category
+    FROM categories
+    WHERE page_id = (
+        SELECT page_id
+        FROM pages
+        WHERE title = ?
+    )
+""", ("Pikachu",)).fetchall()
+
+for category, in categories:
+    print(category)
+
+db.close()
+```
+
+---
+
+## 15. Consultar enlaces entre artículos
+
+También se guardan los enlaces internos.
+
+Por ejemplo:
+
+```python
+links = db.execute("""
+    SELECT target_title
+    FROM page_links
+    WHERE page_id = (
+        SELECT page_id
+        FROM pages
+        WHERE title = ?
+    )
+""", ("Pikachu",)).fetchall()
+
+for title, in links:
+    print(title)
+```
+
+Esto permite construir navegación offline:
+
+```text
+Pikachu
+├── Pichu
+├── Raichu
+├── Pokémon
+├── Pokémon de tipo eléctrico
+└── ...
+```
+
+---
+
+## 16. Actualizar posteriormente la copia
+
+Una vez terminada la descarga inicial, puedes actualizarla:
+
+```bash
+python dump_wikidex.py --update --no-html
+```
+
+El script comprueba el `revision_id`.
+
+Si una página no ha cambiado:
+
+```text
+revision local == revision WikiDex
+```
+
+se salta.
+
+Si ha cambiado:
+
+```text
+revision local != revision WikiDex
+```
+
+descarga la nueva versión.
+
+Esto permite utilizar el dump inicial como una especie de snapshot y actualizarlo periódicamente.
+
+---
+
+## 17. Configuración que recomiendo para tu caso
+
+Para una aplicación personal offline, utilizaría:
+
+```bash
+python dump_wikidex.py \
+    --no-html \
+    --no-json \
+    --delay 1.0 \
+    --cooldown 15 \
+    --cooldown-every 50 \
+    --batch-size 25
+```
+
+El resultado será:
+
+```text
+wikidex_dump/
+└── wikidex.sqlite
+```
+
+Esto es especialmente cómodo porque tu aplicación solo tiene que incluir un archivo de base de datos.
+
+La arquitectura podría ser:
+
+```text
+                 INTERNET
+                    │
+                    ▼
+              WikiDex API
+                    │
+                    ▼
+          dump_wikidex.py
+                    │
+                    ▼
+             wikidex.sqlite
+                    │
+          ┌─────────┴─────────┐
+          ▼                   ▼
+       búsqueda            artículos
+          │                   │
+          └─────────┬─────────┘
+                    ▼
+              TU APLICACIÓN
+                    │
+                    ▼
+                 OFFLINE
+```
+
+---
+
+## 18. Qué contiene exactamente SQLite
+
+Las tablas principales son:
+
+```text
+pages
+```
+
+Contenido de los artículos.
+
+```text
+categories
+```
+
+Relación artículo → categoría.
+
+```text
+page_links
+```
+
+Relación artículo → artículo enlazado.
+
+```text
+pages_fts
+```
+
+Índice de búsqueda de texto completo.
+
+```text
+metadata
+```
+
+Información sobre el propio dump.
+
+Por tanto, `wikidex.sqlite` no es simplemente un montón de HTML: es una representación local bastante útil para construir una aplicación.
+
+---
+
+## 19. Imágenes
+
+El script **no descarga imágenes**.
+
+Esto es intencionado.
+
+Las imágenes de WikiDex no deben tratarse automáticamente como si todas tuvieran la misma licencia que el texto. Antes de crear una copia local de los archivos multimedia hay que comprobar sus licencias individuales.
+
+Por ello, el primer objetivo debería ser:
+
+```text
+artículos
++ categorías
++ enlaces
++ búsqueda
+```
+
+y dejar los archivos multimedia para una segunda fase.
+
+---
+
+## 20. Idiomas
+
+El script actual descarga:
+
+```text
+WikiDex español
+```
+
+No descarga automáticamente:
+
+```text
+en
+de
+fr
+it
+ja
+...
+```
+
+Los enlaces interlingüísticos que aparezcan en los artículos se conservan dentro del wikitext, pero no se siguen para descargar las versiones correspondientes.
+
+Si posteriormente quieres construir un dataset multilingüe, conviene diseñar el esquema de SQLite específicamente para ello en lugar de mezclarlo directamente con esta versión.
+
+---
+
+## 21. Flujo recomendado completo
+
+### Primera vez
+
+```bash
+python dump_wikidex.py --limit 50 --no-html
+```
+
+Comprueba que funciona.
+
+Después:
+
+```bash
+python dump_wikidex.py \
+    --no-html \
+    --no-json \
+    --delay 1.0 \
+    --cooldown 15 \
+    --cooldown-every 50 \
+    --batch-size 25
+```
+
+Espera a que termine.
+
+### Si se interrumpe
+
+```bash
+python dump_wikidex.py \
+    --update \
+    --no-html \
+    --no-json \
+    --delay 1.0 \
+    --cooldown 15 \
+    --cooldown-every 50 \
+    --batch-size 25
+```
+
+### Para actualizar en el futuro
+
+Utiliza el mismo comando de actualización.
+
+---
+
+## 22. Importante sobre licencias
+
+El hecho de que hayas creado una copia local no significa que puedas redistribuir libremente todos sus contenidos.
+
+Antes de distribuir tu aplicación con datos de WikiDex, revisa las condiciones de licencia y atribución aplicables al contenido que estés incorporando. El texto de WikiDex y sus archivos multimedia pueden estar sujetos a condiciones diferentes.
+
+Para una aplicación estrictamente personal y offline, conserva igualmente la información de procedencia y licencia dentro de tu dataset.
+
+---
+
+## 23. Próximo paso recomendado
+
+Una vez tengas el dump funcionando, el siguiente paso lógico es crear una pequeña API local encima de SQLite:
+
+```text
+GET /article/Pikachu
+GET /search?q=eléctrico
+GET /category/Pokémon_de_tipo_eléctrico
+GET /links/Pikachu
+```
+
+Así tu aplicación no tendría que conocer la estructura interna de SQLite. Podría tratar tu WikiDex local como un servicio de datos offline.
