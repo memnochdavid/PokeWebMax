@@ -553,6 +553,138 @@ frontend compila sin errores. **No verificado a ojo en navegador** (mismo hueco 
 `claude-in-chrome` de siempre) — el flujo real del botón "Cachear todo" en `/cache`
 no se ha pulsado a través de la UI en esta sesión, solo su lógica equivalente por curl.
 
+## Selector de idioma de los datos (ES/EN) — HECHO 2026-08-16
+
+David notó que muchas cosas aparecían en inglés (nombres de movimientos, habilidades,
+formas, algunos Pokémon) y pidió poder cambiar el idioma. **Alcance deliberadamente
+acotado**: solo el idioma de los DATOS de PokeAPI, no de la interfaz — nav, botones,
+mensajes de error siguen en español fijo, como el resto de la app. Empezado con
+ES/EN (fácil añadir más, ver abajo).
+
+**Punto clave que simplificó todo:** los payloads ya cacheados traen el nombre en
+*todos* los idiomas dentro de `names[]`/`genera[]`/`flavor_text_entries[]` (así
+responde PokeAPI siempre) — no hizo falta cachear nada nuevo ni tocar
+`PokeApiCacheService`, es un cambio casi entero de frontend. Verificado con curl que
+21 especies difieren de verdad entre es/en (Código Cero/Type: Null, los 10 Pokémon
+Paradoja de Escarlata/Púrpura...) y que moves/abilities también traen `names[]`
+completo (ej. `mega-punch` → "Megapuño"/"Mega Punch").
+
+- `contexts/LanguageContext.jsx`: `LANGUAGES` (`[{code:'es'},{code:'en'}]`),
+  `LanguageProvider` + `useLanguage()`, persistido en `localStorage`
+  (`pokewebmax:language`). Envuelve `<App/>` en `main.jsx`. Selector en el nav
+  (`App.jsx`), pastillas ES/EN junto a los enlaces.
+- `utils/pokeApiLocalization.js`: `localizedEntry(entries, language, textKey)` /
+  `localizedName(payload, language, fallback)` — genérico para cualquier array
+  `[{<textKey>}, language:{name}]` de PokeAPI, con fallback a inglés y luego al
+  primer idioma disponible antes que dejar un hueco vacío.
+- `utils/pokemonFicha.js`: `spanishGenus`/`spanishFlavorTextsByVersion` (hardcodeados
+  a 'es') pasan a `genusForLanguage(species, language)` /
+  `flavorTextsByVersion(species, language)`; nuevas `speciesDisplayName(species,
+  language, fallback)` y `damageClassName(slug, language)` (physical/special/status,
+  solo 3 valores, hardcodeado a mano — no merece cachear `move-damage-class` solo
+  para esto).
+- `utils/pokemonTypes.js`: `typeNameEs` → `typeName(type, language)` — para 'es' usa
+  la tabla `TYPE_NAMES_ES` ya existente, para cualquier otro idioma capitaliza el
+  slug (que YA es el nombre en inglés, `fire`→`Fire`) en vez de mantener una tabla
+  traducida por cada uno de los 18 tipos en cada idioma.
+- Ficha (`PokemonFichaPage.jsx`): nombre del Pokémon, genus, descripción, nombres de
+  movimiento/habilidad/forma y clase de daño ahora pasan por estas funciones con
+  `language` del contexto. El efecto de habilidad (`short_effect`) también.
+- **Backend nuevo, solo para lo que la ficha/lista no cargan completo:**
+  `GET /api/pokemon/names` (`PokemonNamesController` → `PokemonListService::
+  namesById()` → `PokeApiResourceCacheRepository::findSpeciesLocalizedNames()`,
+  JSON_EXTRACT de `$.names` filtrado a los idiomas soportados — mismo patrón de
+  proyección ligera que el resto del repo, sin hidratar payload). Usado por
+  `hooks/usePokemonNames.js` en dos sitios que no tienen la especie completa cargada:
+  la lista de Pokémon (`PokemonListPage`/`PokemonCard`, prop `displayName` nueva) y
+  los nombres de cada etapa en la pestaña EVOS de la ficha (que solo tiene
+  id+slug desde el payload de `evolution-chain`, no la especie de cada etapa). El
+  Pokémon *actual* de la ficha se localiza directo desde su propia `species.names`
+  ya cargada, sin pasar por este endpoint.
+- `hooks/usePokemonBrowser.js`: la búsqueda por nombre ahora compara también contra
+  el nombre localizado (`names[id]?.[language]`), no solo el slug en inglés — para
+  poder buscar "Código Cero" y no solo "type-null".
+
+**Cómo añadir un idioma nuevo:** añadir `{code, label}` a `LANGUAGES` en
+`LanguageContext.jsx` (frontend) + al array `SUPPORTED_LANGUAGES` de
+`PokemonListService` (backend, para que `/api/pokemon/names` lo incluya) — el resto
+(`localizedEntry`, `genusForLanguage`, etc.) ya es genérico por idioma, no hay que
+tocarlo. `typeName()`/`damageClassName()` seguirán cayendo al inglés para cualquier
+idioma que no sea 'es' hasta que se les añada su propia rama si se quiere traducción
+real ahí también.
+
+**No traducido todavía (gap conocido, deliberado por riesgo/coste):** grupo huevo,
+hábitat, tasa de crecimiento y nombres de versión de juego en la pestaña INFO/DESC
+siguen mostrando el slug de PokeAPI capitalizado (en inglés) en cualquier idioma,
+incluido español — requeriría o bien cachear+resolver esos recursos aparte
+(`growth-rate`, `pokemon-habitat`, `egg-group`, `version`) en el ensamblador, o
+hardcodear tablas de traducción que no se quiso arriesgar a equivocar de memoria
+(a diferencia de `damage-class`, que solo tiene 3 valores bien conocidos). Si se pide
+completar esto, el camino correcto es que `PokemonFichaAssembler` resuelva esos
+recursos desde la caché igual que ya hace con species/moves/abilities/forms.
+
+**Verificado:** compila sin errores en las 5 rutas (incluidos los módulos nuevos
+pedidos directamente a Vite), `GET /api/pokemon/names` devuelve 1025 entradas con
+es/en correctos, `GET /api/pokemon/772/ficha` confirma que `species.names`/`genera`
+traen es/en distintos de verdad. **No verificado a ojo en navegador** (clicar el
+selector ES/EN y comprobar visualmente) — mismo hueco de `claude-in-chrome` de
+siempre.
+
+## Fallback de descripción por versión, no global — HECHO 2026-08-16
+
+David notó que faltaban muchos juegos en el selector de descripción. Diagnosticado con
+curl contra datos reales: **es limitación real de PokeAPI, no bug nuestro** — Bulbasaur
+tiene 28 entradas de flavor text en inglés (Rojo→Escudo) pero solo 8 en español
+(empieza en X/Y, nada de Gen 1-5; probablemente sistémico en toda la especie, el
+español se añadió mucho más tarde a PokeAPI). Sí se pudo mejorar la UX: el fallback a
+inglés de `flavorTextsByVersion` (`utils/pokemonFicha.js`) era global (si el idioma
+pedido tenía CERO entradas, todo caía a inglés) — se cambió a **fallback por versión**:
+cada juego usa español si existe, y si no, cae a inglés solo para ESE juego (marcado
+`translated: false`), en vez de que el juego entero desaparezca del selector. Verificado
+simulando el algoritmo contra el payload real de Bulbasaur: pasa de 8 a 14 chips.
+
+Frontend: chip de versión con etiqueta "EN" pequeña cuando `translated: false`
+(`styles.tag`, reusado con `margin-left` propio vía `.versionChip .tag`), y una nota
+bajo la cita ("Sin traducción de PokeAPI para este idioma en este juego") cuando la
+versión activa no está traducida. Cuando el idioma seleccionado ES inglés, nunca se
+marca nada (siempre `translated: true` en ese caso).
+
+## Siguiente sesión: fallback a WikiDex para descripciones sin español
+
+David quiere el siguiente paso: replicar en PokeWebMax el fallback que hace Dexter
+(Android) cuando PokeAPI no tiene la descripción en español de un juego (ver sección
+anterior — es justo el hueco que se acaba de mitigar a medias con el fallback
+por-versión a inglés). **Ya existe un doc de referencia detallado y ya copiado**:
+`docs/reference-android/wikidex-scraping-system.md` (322 líneas) — leerlo primero,
+ahorra re-investigar desde cero. Resumen de lo que dice:
+
+- **Problema documentado con tabla exacta**: PokeAPI en español solo cubre Gen VI-VIII
+  (X→Shield); Gen I-V, BDSP, Legends Arceus (parcial), Scarlet/Violet y Legends Z-A no
+  tienen español en PokeAPI. Coincide con lo que este proyecto verificó por curl esta
+  sesión (Bulbasaur: 8/28 entradas en español).
+- **Prioridad de fallback propuesta** (Android): PokeAPI-ES → WikiDex-ES (cacheado) →
+  PokeAPI-EN. Para ubicaciones/encuentros, WikiDex sería la fuente PRIMARIA (no
+  fallback) porque PokeAPI no tiene texto localizado ahí en absoluto.
+  - Es Kotlin/Room (Jsoup para el HTML, Room para cachear) — habrá que portar el
+    patrón a Symfony (HttpClient de Symfony en vez de Jsoup, un parser HTML en PHP —
+    ver qué hay disponible, quizá `symfony/dom-crawler`, y la tabla genérica
+    `pokeapi_resource_cache` no vale tal cual porque esto no es un recurso de
+    PokeAPI — probablemente haga falta una entidad Doctrine nueva específica para
+    WikiDex, a diferencia de la decisión 8/9 que es solo para lo que sí viene de
+    PokeAPI).
+
+**⚠️ Aviso importante para la siguiente sesión, léelo antes de escribir código:**
+el propio doc dice que el `robots.txt` de WikiDex **bloquea explícitamente
+`ClaudeBot`** (y `GPTBot`, y `/api/`) — y que el enfoque que usa el Android es sortear
+esto con un User-Agent de navegador genérico en las páginas wiki normales (no
+bloqueadas para user-agents genéricos, solo para bots nombrados). Antes de portar ese
+código a este proyecto, plantear esto explícitamente a David: escribir código que
+suplanta el User-Agent para evitar una regla de robots.txt que nombra a Claude
+específicamente es una línea distinta a "leer código que el usuario ya tiene" (ver
+[[project_pokewebmax_progress]] sección de los sprites HOME/animados, mismo tipo de
+situación pero con datos de texto en vez de assets con copyright — no asumir
+automáticamente que aplica el mismo razonamiento sin pararse a pensarlo primero).
+
 ## Pendiente / siguiente paso natural
 
 - No hay vistas de listado/detalle navegable para ningún recurso salvo Pokémon — el resto

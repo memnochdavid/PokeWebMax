@@ -48,8 +48,12 @@ export function typeColor(type) {
   return TYPE_COLORS[type] ?? '#aaaaaa'
 }
 
-export function typeNameEs(type) {
-  return TYPE_NAMES_ES[type] ?? type
+// El slug de PokeAPI ya ES el nombre en inglés (fire, water, grass...), así que para
+// cualquier idioma que no sea español basta con capitalizarlo — no hace falta una
+// tabla traducida para cada uno de los 18 tipos en cada idioma del selector.
+export function typeName(type, language) {
+  if (language === 'es') return TYPE_NAMES_ES[type] ?? type
+  return type.length > 0 ? type[0].toUpperCase() + type.slice(1) : type
 }
 
 export function typeIconUrl(type) {

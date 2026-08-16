@@ -1,8 +1,11 @@
 import usePokemonList from '../../hooks/usePokemonList.js'
 import usePokemonBrowser from '../../hooks/usePokemonBrowser.js'
+import usePokemonNames from '../../hooks/usePokemonNames.js'
+import { useLanguage } from '../../contexts/LanguageContext.jsx'
 import PokemonCard from '../../components/PokemonCard/PokemonCard.jsx'
 import PokemonFilters from '../../components/PokemonFilters/PokemonFilters.jsx'
 import GenerationPager from '../../components/GenerationPager/GenerationPager.jsx'
+import { capitalize } from '../../utils/pokemonFormat.js'
 import styles from './PokemonListPage.module.css'
 
 const officialArtworkUrl = (id) =>
@@ -10,8 +13,10 @@ const officialArtworkUrl = (id) =>
 
 export default function PokemonListPage() {
   const { status, pokemon, error, reload } = usePokemonList()
+  const { language } = useLanguage()
+  const names = usePokemonNames()
   const { filters, setFilter, resetFilters, filtering, generations, activeGeneration, setActiveGeneration, visible } =
-    usePokemonBrowser(pokemon)
+    usePokemonBrowser(pokemon, { names, language })
 
   return (
     <section className={styles.page}>
@@ -55,7 +60,13 @@ export default function PokemonListPage() {
             <ul className={styles.grid}>
               {visible.map((entry) => (
                 <li key={entry.id}>
-                  <PokemonCard id={entry.id} name={entry.name} sprite={officialArtworkUrl(entry.id)} types={entry.types} />
+                  <PokemonCard
+                    id={entry.id}
+                    name={entry.name}
+                    displayName={names[entry.id]?.[language] ?? capitalize(entry.name)}
+                    sprite={officialArtworkUrl(entry.id)}
+                    types={entry.types}
+                  />
                 </li>
               ))}
             </ul>

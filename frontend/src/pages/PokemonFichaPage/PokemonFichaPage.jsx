@@ -3,6 +3,8 @@ import usePokemonFicha from '../../hooks/usePokemonFicha.js'
 import useFichaSection from '../../hooks/useFichaSection.js'
 import useImageFallback from '../../hooks/useImageFallback.js'
 import useSelectedVersion from '../../hooks/useSelectedVersion.js'
+import usePokemonNames from '../../hooks/usePokemonNames.js'
+import { useLanguage } from '../../contexts/LanguageContext.jsx'
 import TypeBadge from '../../components/TypeBadge/TypeBadge.jsx'
 import PokemonHeroSprite from '../../components/PokemonHeroSprite/PokemonHeroSprite.jsx'
 import StatRadarChart from '../../components/StatRadarChart/StatRadarChart.jsx'
@@ -10,13 +12,16 @@ import { typeColor } from '../../utils/pokemonTypes.js'
 import { spriteHomeUrl } from '../../utils/spritesHome.js'
 import { animatedSpriteUrl } from '../../utils/animatedSprite.js'
 import { capitalize, formatPokedexNumber } from '../../utils/pokemonFormat.js'
+import { localizedEntry, localizedName } from '../../utils/pokeApiLocalization.js'
 import {
   FICHA_SECTIONS,
+  damageClassName,
   evolutionStages,
+  flavorTextsByVersion,
+  genusForLanguage,
   generationNumber,
   sectionMissingCount,
-  spanishFlavorTextsByVersion,
-  spanishGenus,
+  speciesDisplayName,
   totalMissing,
 } from '../../utils/pokemonFicha.js'
 import styles from './PokemonFichaPage.module.css'
@@ -29,6 +34,8 @@ export default function PokemonFichaPage() {
   const { status, ficha, error, caching, cacheMissing } = usePokemonFicha(idOrName)
   const { section, setSection } = useFichaSection('DESC')
   const { version: selectedVersion, setVersion } = useSelectedVersion()
+  const { language } = useLanguage()
+  const pokemonNames = usePokemonNames()
   const pokemon = ficha?.pokemon
   const heroImage = useImageFallback(
     pokemon ? spriteHomeUrl(pokemon.id) : null,
@@ -46,8 +53,9 @@ export default function PokemonFichaPage() {
   const missingTotal = totalMissing(missing)
   const generation = generationNumber(species)
 
-  const versions = spanishFlavorTextsByVersion(species)
+  const versions = flavorTextsByVersion(species, language)
   const activeVersion = versions.find((v) => v.version === selectedVersion) ?? versions[0]
+  const displayName = speciesDisplayName(species, language, capitalize(pokemon.name))
 
   return (
     <section className={styles.page}>
@@ -83,10 +91,10 @@ export default function PokemonFichaPage() {
 
         <div className={styles.infoBand} style={{ background: primaryColor }}>
           <div className={styles.nameRow}>
-            <h1 className={styles.name}>{capitalize(pokemon.name)}</h1>
+            <h1 className={styles.name}>{displayName}</h1>
             <span className={styles.number}>{formatPokedexNumber(pokemon.id)}</span>
           </div>
-          {spanishGenus(species) && <p className={styles.genus}>{spanishGenus(species)}</p>}
+          {genusForLanguage(species, language) && <p className={styles.genus}>{genusForLanguage(species, language)}</p>}
           {generation && <span className={styles.genChip}>G-{generation}</span>}
           <div className={styles.metrics}>
             <span className={styles.metricChip}>
@@ -134,10 +142,18 @@ export default function PokemonFichaPage() {
                       onClick={() => setVersion(v.version)}
                     >
                       {capitalize(v.version.replace(/-/g, ' '))}
+                      {!v.translated && <span className={styles.tag}>EN</span>}
                     </button>
                   ))}
                 </div>
-                <p className={styles.quote}>“{activeVersion.text}”</p>
+                <p className={styles.quote}>
+                  “{activeVersion.text}”
+                  {!activeVersion.translated && (
+                    <span className={styles.notTranslated}>
+                      Sin traducción de PokeAPI para este idioma en este juego — se muestra en inglés.
+                    </span>
+                  )}
+                </p>
               </>
             ) : (
               <p>Descripción no disponible — cachea pokemon-species.</p>
@@ -160,7 +176,7 @@ export default function PokemonFichaPage() {
                       height={64}
                     />
                     <div>
-                      <strong>{capitalize(stage.name)}</strong>
+                      <strong>{pokemonNames[stage.id]?.[language] ?? capitalize(stage.name)}</strong>
                       <span className={styles.evoNumber}>{formatPokedexNumber(stage.id)}</span>
                     </div>
                   </Link>
@@ -185,14 +201,13 @@ export default function PokemonFichaPage() {
           <ul className={styles.cardList}>
             {abilities.map((a) => {
               const hidden = pokemon.abilities.find((slot) => slot.ability.name === a.name)?.is_hidden
-              const effect =
-                a.payload?.effect_entries?.find((e) => e.language.name === 'es')?.short_effect ??
-                a.payload?.effect_entries?.find((e) => e.language.name === 'en')?.short_effect
+              const effect = localizedEntry(a.payload?.effect_entries, language, 'short_effect')
+              const abilityName = localizedName(a.payload, language, capitalize(a.name.replace(/-/g, ' ')))
 
               return (
                 <li key={a.id} className={styles.card}>
                   <div className={styles.cardHeader}>
-                    <strong>{capitalize(a.name.replace(/-/g, ' '))}</strong>
+                    <strong>{abilityName}</strong>
                     {hidden && <span className={styles.tag}>Oculta</span>}
                   </div>
                   {a.cached ? (
@@ -211,7 +226,7 @@ export default function PokemonFichaPage() {
             {moves.map((m) => (
               <li key={m.id} className={styles.card}>
                 <div className={styles.cardHeader}>
-                  <strong>{capitalize(m.name.replace(/-/g, ' '))}</strong>
+                  <strong>{localizedName(m.payload, language, capitalize(m.name.replace(/-/g, ' ')))}</strong>
                   {m.payload && <TypeBadge type={m.payload.type.name} />}
                 </div>
                 {m.cached ? (
@@ -225,7 +240,7 @@ export default function PokemonFichaPage() {
                     <span>
                       Prec. <strong>{m.payload.accuracy != null ? `${m.payload.accuracy}%` : '-'}</strong>
                     </span>
-                    <span className={styles.tag}>{capitalize(m.payload.damage_class.name)}</span>
+                    <span className={styles.tag}>{damageClassName(m.payload.damage_class.name, language)}</span>
                   </div>
                 ) : (
                   <p className={styles.notCached}>No cacheado todavía.</p>
@@ -296,7 +311,7 @@ export default function PokemonFichaPage() {
           <ul className={styles.cardList}>
             {forms.map((f) => (
               <li key={f.id} className={styles.card}>
-                {capitalize(f.name.replace(/-/g, ' '))}
+                {localizedName(f.payload, language, capitalize(f.name.replace(/-/g, ' ')))}
                 {!f.cached && <span className={styles.notCached}> — no cacheada</span>}
               </li>
             ))}

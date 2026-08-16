@@ -6,7 +6,7 @@ import { spriteHomeUrl } from '../../utils/spritesHome.js'
 import { capitalize, formatPokedexNumber } from '../../utils/pokemonFormat.js'
 import styles from './PokemonCard.module.css'
 
-export default function PokemonCard({ id, name, sprite, types = [] }) {
+export default function PokemonCard({ id, name, displayName, sprite, types = [] }) {
   const image = useImageFallback(spriteHomeUrl(id), sprite)
 
   const [color1, color2] = types.length > 0
@@ -31,7 +31,7 @@ export default function PokemonCard({ id, name, sprite, types = [] }) {
         />
       </div>
       <div className={styles.info}>
-        <strong className={styles.name}>{capitalize(name)}</strong>
+        <strong className={styles.name}>{displayName ?? capitalize(name)}</strong>
         {types.length > 0 && (
           <div className={styles.types}>
             {types.map((type) => (

@@ -1,4 +1,5 @@
-import { ALL_TYPES, typeNameEs } from '../../utils/pokemonTypes.js'
+import { useLanguage } from '../../contexts/LanguageContext.jsx'
+import { ALL_TYPES, typeName } from '../../utils/pokemonTypes.js'
 import styles from './PokemonFilters.module.css'
 
 const TOGGLES = [
@@ -10,6 +11,8 @@ const TOGGLES = [
 ]
 
 export default function PokemonFilters({ filters, onSetFilter, onReset, filtering, resultCount }) {
+  const { language } = useLanguage()
+
   return (
     <div className={styles.panel}>
       <div className={styles.searchRow}>
@@ -28,7 +31,7 @@ export default function PokemonFilters({ filters, onSetFilter, onReset, filterin
           <option value="">Tipo 1</option>
           {ALL_TYPES.map((type) => (
             <option key={type} value={type}>
-              {typeNameEs(type)}
+              {typeName(type, language)}
             </option>
           ))}
         </select>
@@ -40,7 +43,7 @@ export default function PokemonFilters({ filters, onSetFilter, onReset, filterin
           <option value="">Tipo 2</option>
           {ALL_TYPES.map((type) => (
             <option key={type} value={type}>
-              {typeNameEs(type)}
+              {typeName(type, language)}
             </option>
           ))}
         </select>

@@ -276,6 +276,10 @@
   border-color: var(--signal);
 }
 
+.versionChip .tag {
+  margin-left: 0.4rem;
+}
+
 .quote {
   font-style: italic;
   border-left: 2px solid var(--signal);
@@ -285,6 +289,16 @@
   color: var(--text-h);
   max-width: 60ch;
   box-shadow: 0 10px 24px -18px rgba(0, 0, 0, 0.4);
+}
+
+.notTranslated {
+  display: block;
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text);
+  opacity: 0.7;
+  margin-top: 0.6rem;
 }
 
 .evoList {

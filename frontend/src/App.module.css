@@ -84,6 +84,37 @@
   background: color-mix(in srgb, var(--signal) 12%, transparent);
 }
 
+.langSwitch {
+  display: flex;
+  gap: 0.15rem;
+  padding: 0.2rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--chassis-800);
+}
+
+.langButton {
+  cursor: pointer;
+  border: none;
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  padding: 0.3rem 0.55rem;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.langButton:hover {
+  color: var(--text-h);
+}
+
+.langActive {
+  background: var(--signal);
+  color: var(--signal-contrast);
+}
+
 .main {
   flex: 1;
   display: flex;

@@ -26,9 +26,13 @@ function hasActiveFilters(filters) {
   )
 }
 
-function matchesFilters(entry, filters) {
+function matchesFilters(entry, filters, displayName) {
   const query = filters.query.trim().toLowerCase()
-  if (query !== '' && !entry.name.toLowerCase().includes(query)) return false
+  if (query !== '') {
+    const matchesSlug = entry.name.toLowerCase().includes(query)
+    const matchesDisplay = displayName?.toLowerCase().includes(query)
+    if (!matchesSlug && !matchesDisplay) return false
+  }
   if (filters.type1 !== '' && !entry.types.includes(filters.type1)) return false
   if (filters.type2 !== '' && !entry.types.includes(filters.type2)) return false
   if (filters.mega && !entry.hasMega) return false
@@ -44,7 +48,7 @@ function matchesFilters(entry, filters) {
 // cambia a una lista plana con todos los resultados en cuanto hay algún filtro o
 // búsqueda activa — mismo patrón que el paginador de generaciones del Android de
 // referencia (ver GenerationPagerScreen en Dexter).
-export default function usePokemonBrowser(pokemonList) {
+export default function usePokemonBrowser(pokemonList, { names = {}, language = 'es' } = {}) {
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [activeGeneration, setActiveGeneration] = useState(1)
 
@@ -61,10 +65,10 @@ export default function usePokemonBrowser(pokemonList) {
 
   const visible = useMemo(() => {
     if (filtering) {
-      return pokemonList.filter((entry) => matchesFilters(entry, filters))
+      return pokemonList.filter((entry) => matchesFilters(entry, filters, names[entry.id]?.[language]))
     }
     return pokemonList.filter((entry) => entry.generation === activeGeneration)
-  }, [pokemonList, filters, filtering, activeGeneration])
+  }, [pokemonList, filters, filtering, activeGeneration, names, language])
 
   const setFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }))
   const resetFilters = () => setFilters(EMPTY_FILTERS)

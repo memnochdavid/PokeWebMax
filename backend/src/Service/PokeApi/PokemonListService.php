@@ -18,10 +18,26 @@ use App\Repository\PokeApiResourceCacheRepository;
  */
 class PokemonListService
 {
+    // Idiomas que ofrece el selector de idioma del frontend (LanguageContext.jsx) —
+    // mantener sincronizado si se añade uno ahí.
+    private const SUPPORTED_LANGUAGES = ['es', 'en'];
+
     public function __construct(
         private readonly PokeApiClient $pokeApiClient,
         private readonly PokeApiResourceCacheRepository $repository,
     ) {
+    }
+
+    /**
+     * Nombre de cada especie cacheada en cada idioma soportado — para sitios que
+     * necesitan el nombre localizado sin cargar la especie completa (lista de
+     * Pokémon, nombres de la cadena evolutiva en la ficha).
+     *
+     * @return array<int, array<string, string>>
+     */
+    public function namesById(): array
+    {
+        return $this->repository->findSpeciesLocalizedNames(self::SUPPORTED_LANGUAGES);
     }
 
     /**

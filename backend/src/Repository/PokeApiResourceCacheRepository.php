@@ -76,6 +76,41 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
     }
 
     /**
+     * Nombre de cada especie en los idiomas soportados por el selector de idioma del
+     * frontend (ver LanguageContext) — solo esos, no los ~9 que trae PokeAPI, para no
+     * mandar de más. Usado donde se necesita el nombre localizado pero no el resto del
+     * payload (lista de Pokémon, nombres de la cadena evolutiva en la ficha): esos
+     * sitios no cargan la especie completa, así que no pueden leer `names` ellos
+     * mismos como sí hace la propia ficha con su Pokémon actual.
+     *
+     * @param string[] $languages
+     * @return array<int, array<string, string>> nombre por idioma, indexado por resourceId
+     */
+    public function findSpeciesLocalizedNames(array $languages): array
+    {
+        $rows = $this->getEntityManager()->getConnection()->executeQuery(
+            "SELECT resource_id, JSON_EXTRACT(payload, '$.names') AS names_json
+             FROM pokeapi_resource_cache
+             WHERE resource_type = 'pokemon-species'"
+        )->fetchAllAssociative();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $names = json_decode((string) $row['names_json'], true) ?? [];
+            $byLanguage = [];
+            foreach ($names as $entry) {
+                $lang = $entry['language']['name'] ?? null;
+                if ($lang !== null && in_array($lang, $languages, true)) {
+                    $byLanguage[$lang] = $entry['name'];
+                }
+            }
+            $result[(int) $row['resource_id']] = $byLanguage;
+        }
+
+        return $result;
+    }
+
+    /**
      * De una lista de ids candidatos, cuáles ya están cacheados para ese resourceType
      * — usado por el cacheo por lotes para no volver a pedirle a PokeAPI algo que ya
      * se tiene (defensivo: el frontend ya filtra por `cached` antes de mandar el
