@@ -46,4 +46,31 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
 
         return $result;
     }
+
+    /**
+     * Solo para resourceType 'pokemon': extrae el array `types` de cada payload sin
+     * hidratar el payload completo (~28KB por Pokémon). `JSON_EXTRACT` hace la
+     * proyección en la propia consulta SQL, así que PHP solo decodifica el fragmento
+     * `types` de cada fila, no el payload entero — mismo cuidado que
+     * `findFetchedAtByType` con recursos grandes.
+     *
+     * @return array<int, string[]> nombres de tipo (ordenados por slot) indexados por resourceId
+     */
+    public function findPokemonTypesById(): array
+    {
+        $rows = $this->getEntityManager()->getConnection()->executeQuery(
+            "SELECT resource_id, JSON_EXTRACT(payload, '$.types') AS types_json
+             FROM pokeapi_resource_cache
+             WHERE resource_type = 'pokemon'"
+        )->fetchAllAssociative();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $types = json_decode((string) $row['types_json'], true) ?? [];
+            usort($types, static fn (array $a, array $b) => $a['slot'] <=> $b['slot']);
+            $result[(int) $row['resource_id']] = array_map(static fn (array $t) => $t['type']['name'], $types);
+        }
+
+        return $result;
+    }
 }

@@ -78,6 +78,56 @@ metadata:
    hidratar las entidades completas agota el `memory_limit` de PHP (bug real, visto y
    arreglado en `project_pokewebmax_progress.md`).
 
+9. **La ficha de Pokémon NO necesita tablas tipadas — se compone en el backend leyendo
+   la caché genérica por id/url conocido, nunca por filtro.** David cuestionó la tabla
+   genérica única del punto 8 por "antiintuitiva" (2026-08-16); se reevaluó mirando el
+   código real de `github.com/memnochdavid/Dexter.git` (la app Android, no los docs
+   congelados de `docs/reference-android/` — esos describen 11 pestañas propuestas por
+   un consultor UX que nunca se implementaron; el código real tiene 7:
+   `DESC, EVOS, STATS, MOVES, ABILITY, INTER, FORM`, ver `FichaDesplegables.kt`). Cada
+   pestaña resuelve datos por id/url exacto conocido (species por `pokemon.species.url`,
+   cada movimiento/habilidad por su url, cadena evolutiva por
+   `species.evolution_chain.url`...) — nunca "todos los que cumplan X". Ese patrón
+   confirma que la tabla genérica basta para la ficha: no hace falta esquema nuevo, solo
+   una capa de composición. Implementado como `PokemonFichaAssembler` (lee de
+   `pokeapi_resource_cache`, nunca llama a PokeAPI, marca cada pieza no cacheada con
+   `cached: false` y un resumen `missing` por sección) +
+   `PokemonFichaController::ficha()` (`GET /api/pokemon/{idOrName}/ficha`). Las tablas
+   tipadas del punto 8 siguen reservadas solo para navegadores con filtro real
+   (Movimientos por tipo, Items por categoría...), que son pantallas aparte todavía no
+   construidas. **Why:** evita repetir el error de sobre-diseñar el esquema antes de
+   saber qué patrón de acceso necesita cada vista — la ficha resultó no necesitarlo.
+   **How to apply:** antes de proponer una tabla tipada para una vista nueva, comprobar
+   primero si esa vista accede por id conocido (→ caché genérica + composición) o por
+   filtro sobre un campo interno (→ ahí sí tabla tipada).
+
+10. **Cacheo de "lo que falte" para una ficha concreta SÍ es una acción manual válida,
+    no cacheo implícito.** A raíz de lo anterior, David pidió un botón en la ficha que
+    cachee de un tirón todo lo que le falte (species, evolution-chain, moves,
+    abilities, forms) más un indicador por pestaña de cuánto le falta. Esto no
+    contradice la decisión 2 (cacheo manual): sigue siendo un clic explícito del
+    usuario, solo que dispara varias piezas relacionadas en vez de una. Implementado
+    como `PokemonFichaCacheService::cacheMissing()` (`POST
+    /api/pokemon/{idOrName}/ficha/cache-missing`) — reutiliza
+    `PokeApiCacheService::cache()` pieza por pieza (que ya es idempotente, así que no
+    hace falta precalcular qué falta: pedir todo y lo ya cacheado no cuesta HTTP).
+    **How to apply:** este patrón ("botón que cachea todo lo que le falta a ESTA
+    vista concreta") es el que replicar cuando se construyan los navegadores de
+    Movimientos/Items/Regiones, en vez de forzar al usuario a ir a `/cache` a cachear
+    el recurso genérico entero.
+
+11. **Diseño visual de cards portado de `DexterWeb`** (repo anterior de David,
+    `github.com/memnochdavid/DexterWeb.git`, revisado también en la sesión de
+    2026-08-15 por el diseño de caché). De ahí: `typeColors.js` → adaptado a
+    `frontend/src/utils/pokemonTypes.js` (colores hex por tipo + nombres en español +
+    resolución de icono SVG vía `new URL(..., import.meta.url)`), los 18 SVG de tipo →
+    `frontend/src/assets/types/`, y el patrón de card horizontal con gradiente por tipo
+    dual (`PokemonCardLista.jsx`/`.css`) → `components/PokemonCard/` +
+    `components/TypeBadge/`. `PokemonCard` es genérico (acepta `types=[]` y cae a un
+    gradiente gris neutro si no hay tipos) para poder reusarse tanto en `/ficha` (que sí
+    tiene tipos, vienen del recurso `pokemon`) como en `/pokemon` (que todavía no los
+    tiene — ver nota de "tipos perdidos" en `project_pokewebmax_progress.md`).
+
 **How to apply (general):** antes de añadir cualquier dependencia o patrón "porque el
 Android lo tiene así", confirmar con David si ya toca esa fase — ver
 `project_pokewebmax_progress.md`.

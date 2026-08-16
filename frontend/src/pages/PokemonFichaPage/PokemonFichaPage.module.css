@@ -1,0 +1,163 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 2rem;
+  max-width: 700px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.status {
+  padding: 2rem;
+  opacity: 0.7;
+}
+
+.statusError {
+  padding: 2rem;
+  color: #ef4444;
+}
+
+.hero {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  color: #fff;
+}
+
+.sprite {
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.name {
+  font-size: 1.75rem;
+  margin: 0;
+}
+
+.number {
+  opacity: 0.85;
+}
+
+.types {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.cacheBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 0.5rem;
+}
+
+.cacheBar button {
+  cursor: pointer;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.cacheBar button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+  padding-bottom: 0.75rem;
+}
+
+.tab,
+.tabActive {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  opacity: 0.6;
+  padding: 0.25rem 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.tabActive {
+  opacity: 1;
+  font-weight: 700;
+}
+
+.badge {
+  background: #ef4444;
+  color: #fff;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  font-weight: 700;
+}
+
+.content {
+  line-height: 1.6;
+}
+
+.stats {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.stats li {
+  display: grid;
+  grid-template-columns: 6rem 1fr 2.5rem;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.statName {
+  text-transform: capitalize;
+  opacity: 0.8;
+  font-size: 0.85rem;
+}
+
+.statBarTrack {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: rgba(128, 128, 128, 0.25);
+  overflow: hidden;
+}
+
+.statBarFill {
+  display: block;
+  height: 100%;
+  background: #3b82f6;
+}
+
+.evoChain {
+  font-size: 1.1rem;
+  text-transform: capitalize;
+}
+
+.list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.notCached {
+  opacity: 0.6;
+  font-size: 0.85rem;
+}

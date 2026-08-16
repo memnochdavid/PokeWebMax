@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import axios from 'axios'
+import { cacheAllPending } from '../utils/cachePokeApiResource.js'
 
 export default function useCacheAllResource(resourceType) {
   const [status, setStatus] = useState('idle') // idle | running | done | error
@@ -13,25 +13,15 @@ export default function useCacheAllResource(resourceType) {
     setDone(0)
     setTotal(0)
 
-    let pending
     try {
-      const { data } = await axios.get(`/api/pokeapi/${resourceType}`)
-      pending = data.filter((entry) => !entry.cached)
+      await cacheAllPending(resourceType, {
+        onTotal: setTotal,
+        onProgress: () => setDone((prev) => prev + 1),
+      })
     } catch (err) {
       setError(err.response?.data?.error ?? 'Error inesperado.')
       setStatus('error')
       return
-    }
-
-    setTotal(pending.length)
-
-    for (const entry of pending) {
-      try {
-        await axios.post(`/api/pokeapi/${resourceType}/cache/${entry.id}`)
-      } catch {
-        // se ignora un fallo puntual y se sigue con el resto
-      }
-      setDone((prev) => prev + 1)
     }
 
     setStatus('done')

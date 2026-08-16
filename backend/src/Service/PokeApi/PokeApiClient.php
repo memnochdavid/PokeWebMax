@@ -36,7 +36,7 @@ class PokeApiClient
 
         return array_map(
             function (array $entry) use ($resourceType) {
-                $id = $this->extractIdFromUrl($entry['url']);
+                $id = PokeApiUrl::idFromUrl($entry['url']);
 
                 return [
                     'id' => $id,
@@ -45,13 +45,6 @@ class PokeApiClient
             },
             $data['results'],
         );
-    }
-
-    private function extractIdFromUrl(string $url): int
-    {
-        $segments = array_values(array_filter(explode('/', rtrim($url, '/'))));
-
-        return (int) end($segments);
     }
 
     private function get(string $resourceType, string $idOrName): array

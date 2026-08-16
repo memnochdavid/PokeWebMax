@@ -4,3 +4,9 @@
 
 # OS
 .DS_Store
+
+# Sprites HOME (projectpokemon.org) y animados (copiados del clon de Dexter) por
+# David — assets con copyright de Nintendo/Game Freak/Creatures, no se redistribuyen en
+# el repo público.
+frontend/public/sprites_home/
+frontend/public/animated/

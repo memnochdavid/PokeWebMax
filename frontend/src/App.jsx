@@ -2,6 +2,7 @@ import { NavLink, Route, Routes } from 'react-router-dom'
 import StatusPage from './pages/StatusPage/StatusPage.jsx'
 import CacheAllPage from './pages/CacheAllPage/CacheAllPage.jsx'
 import PokemonListPage from './pages/PokemonListPage/PokemonListPage.jsx'
+import PokemonFichaPage from './pages/PokemonFichaPage/PokemonFichaPage.jsx'
 import styles from './App.module.css'
 
 const navLinkClassName = ({ isActive }) => (isActive ? styles.navActive : undefined)
@@ -26,6 +27,7 @@ function App() {
           <Route path="/" element={<StatusPage />} />
           <Route path="/cache" element={<CacheAllPage />} />
           <Route path="/pokemon" element={<PokemonListPage />} />
+          <Route path="/ficha/:idOrName" element={<PokemonFichaPage />} />
         </Routes>
       </main>
     </div>

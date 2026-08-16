@@ -11,7 +11,7 @@ export default function usePokemonList() {
     setError(null)
 
     axios
-      .get('/api/pokeapi/pokemon-species')
+      .get('/api/pokemon')
       .then(({ data }) => {
         setPokemon(data.filter((entry) => entry.cached))
         setStatus('success')

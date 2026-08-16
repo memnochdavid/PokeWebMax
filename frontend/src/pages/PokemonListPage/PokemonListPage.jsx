@@ -1,4 +1,5 @@
 import usePokemonList from '../../hooks/usePokemonList.js'
+import PokemonCard from '../../components/PokemonCard/PokemonCard.jsx'
 import styles from './PokemonListPage.module.css'
 
 const officialArtworkUrl = (id) =>
@@ -25,16 +26,8 @@ export default function PokemonListPage() {
       {pokemon.length > 0 && (
         <ul className={styles.grid}>
           {pokemon.map((entry) => (
-            <li key={entry.id} className={styles.card}>
-              <img
-                className={styles.sprite}
-                src={officialArtworkUrl(entry.id)}
-                alt={entry.name}
-                width={64}
-                height={64}
-              />
-              <strong>{entry.name}</strong>
-              <span>#{entry.id}</span>
+            <li key={entry.id}>
+              <PokemonCard id={entry.id} name={entry.name} sprite={officialArtworkUrl(entry.id)} types={entry.types} />
             </li>
           ))}
         </ul>
