@@ -54,13 +54,24 @@
     "stages": "Stages",
     "clear": "Clear",
     "results_one": "{{count}} result",
-    "results_other": "{{count}} results"
+    "results_other": "{{count}} results",
+    "sortBy": "Sort by",
+    "sortDirectionAsc": "Ascending",
+    "sortDirectionDesc": "Descending",
+    "sortNumber": "Number",
+    "sortName": "Name",
+    "sortType": "Type",
+    "sortHeight": "Height",
+    "sortWeight": "Weight",
+    "sortCaptureRate": "Capture rate",
+    "sortStatsTotal": "Total stats"
   },
   "generationPager": {
     "ariaLabel": "Generation"
   },
   "ficha": {
     "loading": "Loading…",
+    "backToList": "Pokémon",
     "cacheBarMissing": "{{count}} resources still need caching to complete this entry.",
     "cacheButton": "Cache everything missing",
     "cachingButton": "Caching…",

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import axios from 'axios'
 import i18n from '../i18n.js'
+import { invalidatePokemonCache } from '../utils/pokemonListCache.js'
 
 export default function usePokemonFicha(idOrName) {
   const [status, setStatus] = useState('loading') // loading | success | error
@@ -33,6 +34,7 @@ export default function usePokemonFicha(idOrName) {
     try {
       const { data } = await axios.post(`/api/pokemon/${idOrName}/ficha/cache-missing`)
       setFicha(data)
+      invalidatePokemonCache() // puede haber cacheado la species que faltaba — la lista dejaría de estar al día
     } catch (err) {
       setError(err.response?.data?.error ?? i18n.t('errors.unexpected'))
     } finally {

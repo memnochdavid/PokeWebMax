@@ -17,8 +17,20 @@ export default function PokemonListPage() {
   const { language } = useLanguage()
   const { t } = useTranslation()
   const names = usePokemonNames()
-  const { filters, setFilter, resetFilters, filtering, generations, activeGeneration, setActiveGeneration, visible } =
-    usePokemonBrowser(pokemon, { names, language })
+  const {
+    filters,
+    setFilter,
+    resetFilters,
+    filtering,
+    generations,
+    activeGeneration,
+    setActiveGeneration,
+    sortKey,
+    setSortKey,
+    sortDirection,
+    toggleSortDirection,
+    visible,
+  } = usePokemonBrowser(pokemon, { names, language })
 
   return (
     <section className={styles.page}>
@@ -46,6 +58,10 @@ export default function PokemonListPage() {
             onReset={resetFilters}
             filtering={filtering}
             resultCount={visible.length}
+            sortKey={sortKey}
+            onSetSortKey={setSortKey}
+            sortDirection={sortDirection}
+            onToggleSortDirection={toggleSortDirection}
           />
 
           {!filtering && (

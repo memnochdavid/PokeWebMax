@@ -1,5 +1,37 @@
 import { useMemo, useState } from 'react'
 
+// Catálogo interno indexado por clave (mismo criterio que TOGGLES en PokemonFilters) —
+// `value(entry, names, language)` es lo que se compara; null se manda siempre al final
+// (Pokémon sin ese dato cacheado, ej. weight/statsTotal sin `pokemon` cacheado) en vez
+// de ordenar como si fuera 0, que engañaría ("el más ligero" no debería ser "el que no
+// sabemos su peso").
+export const SORTS = {
+  number: { labelKey: 'filters.sortNumber', value: (entry) => entry.id },
+  name: {
+    labelKey: 'filters.sortName',
+    value: (entry, names, language) => names[entry.id]?.[language] ?? entry.name,
+  },
+  type: { labelKey: 'filters.sortType', value: (entry) => entry.types[0] ?? '' },
+  height: { labelKey: 'filters.sortHeight', value: (entry) => entry.height },
+  weight: { labelKey: 'filters.sortWeight', value: (entry) => entry.weight },
+  captureRate: { labelKey: 'filters.sortCaptureRate', value: (entry) => entry.captureRate },
+  statsTotal: { labelKey: 'filters.sortStatsTotal', value: (entry) => entry.statsTotal },
+}
+
+function compareBy(sortKey, direction, names, language) {
+  const { value } = SORTS[sortKey]
+  const dir = direction === 'desc' ? -1 : 1
+  return (a, b) => {
+    const va = value(a, names, language)
+    const vb = value(b, names, language)
+    if (va == null && vb == null) return 0
+    if (va == null) return 1 // sin dato siempre al final, en cualquier dirección
+    if (vb == null) return -1
+    if (typeof va === 'string') return dir * va.localeCompare(vb)
+    return dir * (va - vb)
+  }
+}
+
 const EMPTY_FILTERS = {
   query: '',
   type1: '',
@@ -51,6 +83,8 @@ function matchesFilters(entry, filters, displayName) {
 export default function usePokemonBrowser(pokemonList, { names = {}, language = 'es' } = {}) {
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [activeGeneration, setActiveGeneration] = useState(1)
+  const [sortKey, setSortKey] = useState('number')
+  const [sortDirection, setSortDirection] = useState('asc')
 
   const generations = useMemo(() => {
     const counts = new Map()
@@ -64,14 +98,15 @@ export default function usePokemonBrowser(pokemonList, { names = {}, language = 
   const filtering = hasActiveFilters(filters)
 
   const visible = useMemo(() => {
-    if (filtering) {
-      return pokemonList.filter((entry) => matchesFilters(entry, filters, names[entry.id]?.[language]))
-    }
-    return pokemonList.filter((entry) => entry.generation === activeGeneration)
-  }, [pokemonList, filters, filtering, activeGeneration, names, language])
+    const base = filtering
+      ? pokemonList.filter((entry) => matchesFilters(entry, filters, names[entry.id]?.[language]))
+      : pokemonList.filter((entry) => entry.generation === activeGeneration)
+    return [...base].sort(compareBy(sortKey, sortDirection, names, language))
+  }, [pokemonList, filters, filtering, activeGeneration, names, language, sortKey, sortDirection])
 
   const setFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }))
   const resetFilters = () => setFilters(EMPTY_FILTERS)
+  const toggleSortDirection = () => setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
 
   return {
     filters,
@@ -81,6 +116,10 @@ export default function usePokemonBrowser(pokemonList, { names = {}, language = 
     generations,
     activeGeneration,
     setActiveGeneration,
+    sortKey,
+    setSortKey,
+    sortDirection,
+    toggleSortDirection,
     visible,
   }
 }

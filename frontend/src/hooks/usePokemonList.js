@@ -1,20 +1,24 @@
 import { useCallback, useEffect, useState } from 'react'
 import axios from 'axios'
 import i18n from '../i18n.js'
+import { getCachedPokemon, setCachedPokemon } from '../utils/pokemonListCache.js'
 
 export default function usePokemonList() {
-  const [status, setStatus] = useState('loading') // loading | success | error
-  const [pokemon, setPokemon] = useState([])
+  const cached = getCachedPokemon()
+  const [status, setStatus] = useState(cached ? 'success' : 'loading') // loading | success | error
+  const [pokemon, setPokemon] = useState(cached ?? [])
   const [error, setError] = useState(null)
 
-  const load = useCallback(() => {
+  const fetchList = useCallback(() => {
     setStatus('loading')
     setError(null)
 
     axios
       .get('/api/pokemon')
       .then(({ data }) => {
-        setPokemon(data.filter((entry) => entry.cached))
+        const cachedOnly = data.filter((entry) => entry.cached)
+        setCachedPokemon(cachedOnly)
+        setPokemon(cachedOnly)
         setStatus('success')
       })
       .catch((err) => {
@@ -24,8 +28,11 @@ export default function usePokemonList() {
   }, [])
 
   useEffect(() => {
-    load()
-  }, [load])
+    if (!cached) fetchList()
+    // Solo en el montaje: si ya había caché, no se repite el fetch — "reload" sigue
+    // disponible para forzarlo a mano (botón Recargar).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  return { status, pokemon, error, reload: load }
+  return { status, pokemon, error, reload: fetchList }
 }

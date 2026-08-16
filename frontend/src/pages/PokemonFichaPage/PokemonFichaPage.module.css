@@ -3,14 +3,29 @@
   flex-direction: column;
   gap: 1.25rem;
   padding: 2rem;
-  max-width: 1280px;
+  max-width: 1520px;
   margin: 0 auto;
   width: 100%;
 }
 
+.backLink {
+  align-self: flex-start;
+  color: var(--text);
+  text-decoration: none;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  transition: color 0.15s ease;
+}
+
+.backLink:hover {
+  color: var(--signal);
+}
+
 .layout {
   display: grid;
-  grid-template-columns: 340px 1fr;
+  grid-template-columns: 380px 1fr;
   gap: 1.75rem;
   align-items: start;
 }
@@ -62,7 +77,7 @@
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  height: 16rem;
+  height: 22rem;
   padding-top: 1rem;
   position: relative;
   overflow: hidden;
@@ -83,8 +98,8 @@
 }
 
 .scanChamber {
-  width: 12rem;
-  height: 12rem;
+  width: 17rem;
+  height: 17rem;
   margin-bottom: 0.5rem;
   display: flex;
   align-items: center;
@@ -209,10 +224,20 @@
   cursor: default;
 }
 
+/* Ya no son pestañas que ocultan secciones — son anclas que hacen scroll a cada
+   sección (todas se renderizan siempre, apiladas debajo). Fijas bajo el nav de la app
+   para poder saltar de sección sin tener que volver a subir del todo; se resaltan
+   solas al hacer scroll (scrollspy, ver PokemonFichaPage.jsx). */
 .tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
+  position: sticky;
+  top: 3.6rem;
+  z-index: 5;
+  padding: 0.6rem 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
 }
 
 .tab {
@@ -249,7 +274,31 @@
 }
 
 .content {
+  display: flex;
+  flex-direction: column;
+  gap: 2.75rem;
   line-height: 1.6;
+}
+
+.sectionBlock {
+  /* Offset del scroll-to-ancla: altura combinada del nav de la app + la barra de
+     anclas fija, para que el título de la sección no quede tapado debajo de ambas. */
+  scroll-margin-top: 8.5rem;
+}
+
+/* Solo en móvil: una sección visible a la vez (como antes), por el mismo motivo que
+   señaló David al pedir el cambio — en escritorio esta clase no hace nada. */
+@media (max-width: 900px) {
+  .sectionInactiveMobile {
+    display: none;
+  }
+}
+
+.sectionHeading {
+  font-size: 1.15rem;
+  margin: 0 0 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--line);
 }
 
 .versionPicker {
@@ -280,6 +329,47 @@
   margin-left: 0.4rem;
 }
 
+/* Carátula del juego en vez del nombre en texto (recurso copiado de Pokedex_API, ver
+   utils/gameCovers.js) — mismo hueco en el flex wrap que versionChip para las
+   versiones sin carátula disponible (DLC/exclusivas de Japón). */
+.versionCover {
+  cursor: pointer;
+  position: relative;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 2px solid var(--line);
+  border-radius: 0.4rem;
+  overflow: hidden;
+  background: var(--chassis-900);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.versionCover:hover {
+  border-color: var(--signal);
+  transform: translateY(-2px);
+}
+
+.versionCover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.versionCoverTag {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  background: var(--chassis-900);
+  color: var(--text-h);
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.05rem 0.2rem;
+  border-radius: 0.25rem 0 0 0;
+}
+
 .quote {
   font-style: italic;
   border-left: 2px solid var(--signal);
@@ -287,7 +377,7 @@
   padding: 1rem 1.25rem;
   border-radius: 0 0.4rem 0.4rem 0;
   color: var(--text-h);
-  max-width: 60ch;
+  max-width: 85ch;
   box-shadow: 0 10px 24px -18px rgba(0, 0, 0, 0.4);
 }
 
@@ -364,20 +454,71 @@
 
 .statsPanel {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
+  gap: 2.5rem;
 }
 
 .statsPanel svg {
   font-family: var(--font-mono);
   filter: drop-shadow(0 0 6px currentColor);
+  flex-shrink: 0;
+}
+
+/* Al lado del radar en vez de debajo — en pantallas anchas el radar dejaba todo ese
+   espacio vacío; la lista de barras lo aprovecha sin agrandar nada. */
+.statBars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-width: 16rem;
+  flex: 1;
+  max-width: 26rem;
+}
+
+.statBarRow {
+  display: grid;
+  grid-template-columns: 4.2rem 1fr 2.5rem;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.statBarLabel {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text);
+  opacity: 0.8;
+}
+
+.statBarTrack {
+  height: 0.5rem;
+  border-radius: 0.2rem;
+  background: var(--chassis-800);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.statBarFill {
+  height: 100%;
+  border-radius: 0.2rem 0 0 0.2rem;
+}
+
+.statBarValue {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-h);
+  font-weight: 600;
+  text-align: right;
 }
 
 .statsTotal {
   font-family: var(--font-mono);
   color: var(--text-h);
   font-size: 0.85rem;
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
 }
 
 .cardList {
@@ -421,6 +562,14 @@
   letter-spacing: 0.03em;
   font-size: 0.68rem;
   font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.damageClassIcon {
+  height: 0.85rem;
+  width: auto;
 }
 
 .moveStats {

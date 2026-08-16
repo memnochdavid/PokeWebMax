@@ -758,6 +758,118 @@ preferencia explícita para dejarlo mejor preparado a futuro (más idiomas, plur
     sesión) — clicar el selector ES/EN y comprobar que todo el nav/botones/mensajes
     cambian de verdad sigue pendiente de que David lo mire una vez.
 
+## Seis retoques de UX del frontend — HECHO 2026-08-17
+
+David dio una lista de 6 quejas concretas tras usar la app un rato. Todas resueltas
+en la misma sesión (commit+push de la sesión anterior ya hecho antes de empezar):
+
+1. **Home = lista de Pokémon, no Estado.** Rutas re-mapeadas en `App.jsx`: `/` ahora es
+   `PokemonListPage`, `StatusPage` se movió a `/status`. Nav reordenado: Pokémon,
+   Cachear, Estado.
+2. **Ordenación en la lista** (antes no existía ninguna, solo filtros). Nueva
+   constante `SORTS` en `hooks/usePokemonBrowser.js` (número/nombre/tipo/altura/peso/
+   facilidad de captura/total de stats) + toggle asc/desc. Requirió backend nuevo:
+   `PokeApiResourceCacheRepository::findPokemonListMetricsById()` (peso/altura/suma de
+   stats desde el payload `pokemon` cacheado) y `capture_rate` añadido a
+   `findSpeciesSummaries()` — `PokemonListService::listAll()` los expone. Verificado
+   con datos reales: peso ordena Gastly/Kartana primero (los más ligeros reales),
+   captura ordena legendarios primero (tasa 3, la más baja real).
+3. **Interfaz más grande / letras más visibles.** `index.css`: `font: 16px` → `18px`
+   en `:root`. Casi todo el sizing de la app está en `rem`, así que esto escala
+   interfaz y texto a la vez sin tocar cada regla suelta.
+4. **Navegación ficha→lista.** No existía ningún control en la app para volver — había
+   que usar el botón atrás del navegador. Añadido `<Link to="/">` ("← Pokémon") arriba
+   de `PokemonFichaPage`.
+5. **Espacio desaprovechado en la ficha.** `.page` max-width 1280px → 1520px, `.quote`
+   (descripción) 60ch → 85ch. El cambio real: la pestaña STATS solo mostraba el radar
+   centrado con mucho hueco vacío alrededor — ahora va acompañado de una lista de
+   barras por stat (`.statBars`, reusa `STAT_ORDER`/`STAT_LABELS` ahora exportados de
+   `StatRadarChart.jsx`) en vez de agrandar nada.
+6. **La lista se recargaba entera cada vez que volvías de una ficha.** Nueva caché en
+   memoria fuera de React, `utils/pokemonListCache.js` (`getCachedPokemon`/
+   `setCachedPokemon`/`invalidatePokemonCache`) — `usePokemonList` la usa como estado
+   inicial y solo hace fetch si está vacía; el botón "Recargar" la sigue forzando
+   igual. Invalidada explícitamente cuando algo puede haber cambiado lo que se ve en
+   la lista: cachear `pokemon`/`pokemon-species` desde `/cache` (por recurso o
+   "cachear todo"), o `cacheMissing` desde la propia ficha.
+
+**Verificado:** `vite build` de producción compiló limpio (168 módulos) tras todos los
+cambios. Ordenación probada contra `/api/pokemon` real (1025 especies cacheadas), no
+simulada. **No verificado a ojo en navegador** — sin `claude-in-chrome` disponible
+esta sesión tampoco; David debería darle un vistazo al layout de STATS y al tamaño de
+letra antes de darlo por definitivo, son los dos cambios más "de gusto" del lote.
+
+## Versiones "desaparecidas" del selector de descripción — HECHO 2026-08-17
+
+David notó que "Blue" no aparecía como opción en el selector de descripción de la
+ficha y preguntó si era un fallo de diseño. Lo era, aunque intencional: la sesión que
+implementó el fallback por-versión (ver más arriba) colapsaba texto idéntico entre
+versiones a UNA sola entrada quedándose con la primera y **descartando el resto en
+silencio** — Rojo/Azul comparten la misma redacción en PokeAPI, así que "Azul" se
+perdía sin ningún indicio. Verificado con Bulbasaur: solo 12 de las 28 versiones
+reales sobrevivían al collapse (diamante/perla/platino/negro/blanco/negro-2/blanco-2/Y
+compartían texto y colapsaban a un único "Diamante").
+
+**Primer arreglo (agrupar en una pastilla con contador `+N` y tooltip) descartado por
+David tras verlo explicado**: "no importa que haya descripciones idénticas (si
+realmente en los juegos eran idénticas)" — prefiere transparencia total sobre
+compacidad. **Decisión final**: `flavorTextsByVersion()` en `utils/pokemonFicha.js`
+ya NO colapsa ni agrupa nada — cada versión real es su propia pastilla del selector,
+aunque el texto sea idéntico al de otra. Vuelve a devolver `{version: string, text,
+translated}` (singular, como antes de la sesión), no `{versions: string[]}`.
+Verificado con datos reales: Bulbasaur muestra sus 28 versiones reales como 28
+pastillas independientes, "Azul" incluida.
+
+## Iconos/carátulas de Pokedex_API + rediseño de la ficha (sin pestañas) — HECHO 2026-08-17
+
+**Recursos copiados de Pokedex_API** (`/media/david/BIG_DATA/Docu/WORKSPACE/Pokedex_API/app/src/main/res/drawable/` —
+proyecto Android de referencia, **solo lectura, no se toca nada ahí**, ver CLAUDE.md):
+- `fisico.png`/`especial.png`/`estado.png` → `frontend/src/assets/damage-classes/
+  {physical,special,status}.png`. Usados en la card de movimiento (icono junto al
+  texto de la clase de daño), vía `damageClassIconUrl()` en `utils/pokemonFicha.js`.
+- 38 carátulas `game_*.{webp,jpg,png}` → `frontend/src/assets/games/<version-slug>.*`
+  (mapeadas a mano a los slugs `version` de PokeAPI). **Redimensionadas de 2048×2048
+  (~800KB) a máx. 220×220 con ImageMagick** antes de copiar al repo — se muestran a
+  44px, no tenía sentido cargar el original; 4,6MB → 720KB en total.
+  `utils/gameCovers.js` las resuelve con `import.meta.glob` (extensión mixta, no vale
+  un import estático por archivo) → `gameCoverUrl(versionSlug)`, `null` si no hay
+  carátula (DLC/exclusivas de Japón que Pokedex_API no tenía, ej. colosseum). El
+  selector de descripción usa la carátula en vez del nombre en texto cuando existe.
+
+**Rediseño de la ficha** (David señaló, con captura, que el sprite se veía pequeño y
+sobraba muchísimo espacio vacío bajo las pestañas — confirmado en la captura: la
+pestaña Descripción activa dejaba más de media pantalla vacía). Propuesta discutida y
+aprobada por David ("cabe todo en la misma vista, sin pestañas, y con anclas, sí"):
+- Las 7 secciones (`FICHA_SECTIONS`) se renderizan SIEMPRE, apiladas, ya no hay
+  `{section === 'X' && (...)}` ocultando el resto. Cada una es un `<section>` con
+  `<h2>` propio y `scroll-margin-top` (offset combinado de las dos barras fijas).
+- La barra de "pestañas" pasó a ser una barra de anclas: `onClick` hace
+  `scrollIntoView` en vez de mostrar/ocultar, y se quedó `position: sticky` justo
+  debajo del nav de la app para poder saltar de sección sin subir del todo.
+  **Scrollspy con `IntersectionObserver`** (banda de activación bajo las dos barras
+  fijas hasta el 70% superior del viewport) resalta sola la pestaña de la sección que
+  se está viendo al hacer scroll, no solo al hacer click.
+- Sprite/animación agrandado (`heroBands` 16rem→22rem, `scanChamber` 12rem→17rem) y
+  columna del hero ensanchada (340px→380px) — ahora que el contenido de al lado ya no
+  está artificialmente acotado a una sola pestaña corta, no hay problema en que el
+  hero ocupe más.
+- **Responsive de verdad, sí implementado**: en móvil (≤900px, mismo breakpoint que ya
+  partía `.layout` a una columna) se mantiene el comportamiento de mostrar-solo-la-
+  sección-activa — clase `.sectionInactiveMobile` (`display:none` solo bajo ese
+  breakpoint) en las 6 secciones no activas, más `scrollToSection()` con
+  `window.matchMedia('(min-width: 901px)')` para no disparar el scroll-to-ancla en
+  móvil (ahí no hace falta, solo cambia qué sección está visible). Razonamiento de
+  David en su mensaje original de que los tabs sí tienen sentido en móvil, aplicado
+  literalmente.
+
+**Verificado:** `vite build` de producción compila limpio tras cada paso (glob de
+carátulas incluido, 38 imágenes bundleadas correctamente), estructura de las 7
+`<section>` balanceada (8 aperturas/8 cierres contando el `<section>` raíz de la
+página), keys de `FICHA_SECTIONS` coinciden 1:1 con las refs del scrollspy. **No
+verificado a ojo en navegador** (sin `claude-in-chrome` esta sesión tampoco) — el
+scroll-to-ancla, el offset de las barras fijas y el scrollspy son la parte más
+sensible a probar visualmente antes de darlo por bueno del todo.
+
 ## Pendiente / siguiente paso natural
 
 - No hay vistas de listado/detalle navegable para ningún recurso salvo Pokémon — el resto

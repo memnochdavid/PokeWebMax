@@ -1,6 +1,12 @@
 import { useCallback, useState } from 'react'
 import { cacheAllPending } from '../utils/cachePokeApiResource.js'
 import i18n from '../i18n.js'
+import { invalidatePokemonCache } from '../utils/pokemonListCache.js'
+
+// Recursos cuyo cambio afecta a lo que muestra /pokemon (cached/types/peso/altura/
+// stats) — cachear cualquier otra cosa (item, move, location...) no vuelve obsoleta
+// la lista, así que no hace falta invalidarla.
+const AFFECTS_POKEMON_LIST = new Set(['pokemon-species', 'pokemon'])
 
 export default function useCacheAllResource(resourceType) {
   const [status, setStatus] = useState('idle') // idle | running | done | error
@@ -25,6 +31,7 @@ export default function useCacheAllResource(resourceType) {
       return
     }
 
+    if (AFFECTS_POKEMON_LIST.has(resourceType)) invalidatePokemonCache()
     setStatus('done')
   }, [resourceType])
 

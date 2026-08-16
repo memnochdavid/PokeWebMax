@@ -54,13 +54,24 @@
     "stages": "Etapas",
     "clear": "Limpiar",
     "results_one": "{{count}} resultado",
-    "results_other": "{{count}} resultados"
+    "results_other": "{{count}} resultados",
+    "sortBy": "Ordenar por",
+    "sortDirectionAsc": "Ascendente",
+    "sortDirectionDesc": "Descendente",
+    "sortNumber": "Número",
+    "sortName": "Nombre",
+    "sortType": "Tipo",
+    "sortHeight": "Altura",
+    "sortWeight": "Peso",
+    "sortCaptureRate": "Facilidad de captura",
+    "sortStatsTotal": "Total de stats"
   },
   "generationPager": {
     "ariaLabel": "Generación"
   },
   "ficha": {
     "loading": "Cargando…",
+    "backToList": "Pokémon",
     "cacheBarMissing": "Faltan {{count}} recursos por cachear para completar esta ficha.",
     "cacheButton": "Cachear todo lo que falta",
     "cachingButton": "Cacheando…",

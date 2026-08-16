@@ -5,3 +5,4 @@
 - [Estado de avance](project_pokewebmax_progress.md) — qué está montado y qué falta, se actualiza cada sesión
 - [Plugins de diseño requeridos](project_pokewebmax_required_plugins.md) — frontend-design y superdesign, instalar si no aparecen
 - [Análisis del dump de WikiDex](project_pokewebmax_wikidex_dump_analysis.md) — estructura del dump local, cómo cruza con PokeAPI, plan de integración pendiente
+- [No colapsar datos en silencio](feedback_no_silent_data_collapsing.md) — David prefiere ver cada entrada real (aunque coincida con otra) antes que una UI compacta que oculte datos

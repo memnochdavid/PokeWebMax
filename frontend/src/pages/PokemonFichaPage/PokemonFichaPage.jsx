@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import usePokemonFicha from '../../hooks/usePokemonFicha.js'
@@ -9,14 +9,16 @@ import usePokemonNames from '../../hooks/usePokemonNames.js'
 import { useLanguage } from '../../contexts/LanguageContext.jsx'
 import TypeBadge from '../../components/TypeBadge/TypeBadge.jsx'
 import PokemonHeroSprite from '../../components/PokemonHeroSprite/PokemonHeroSprite.jsx'
-import StatRadarChart from '../../components/StatRadarChart/StatRadarChart.jsx'
+import StatRadarChart, { MAX_STAT, STAT_LABELS, STAT_ORDER } from '../../components/StatRadarChart/StatRadarChart.jsx'
 import { typeColor } from '../../utils/pokemonTypes.js'
 import { spriteHomeUrl } from '../../utils/spritesHome.js'
 import { animatedSpriteUrl } from '../../utils/animatedSprite.js'
 import { capitalize, formatPokedexNumber } from '../../utils/pokemonFormat.js'
 import { localizedName } from '../../utils/pokeApiLocalization.js'
+import { gameCoverUrl } from '../../utils/gameCovers.js'
 import {
   FICHA_SECTIONS,
+  damageClassIconUrl,
   damageClassName,
   evolutionStages,
   flavorTextsByVersion,
@@ -31,6 +33,13 @@ import styles from './PokemonFichaPage.module.css'
 
 const officialArtworkUrl = (id) =>
   `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`
+
+const sectionLabel = Object.fromEntries(FICHA_SECTIONS.map(({ key, label }) => [key, label]))
+
+// Ver comentario sobre sectionRefs/scrollToSection en el componente: en escritorio da
+// igual (todas visibles), en móvil solo la sección activa queda sin este class extra.
+const sectionClassName = (styles, key, activeSection) =>
+  key === activeSection ? styles.sectionBlock : `${styles.sectionBlock} ${styles.sectionInactiveMobile}`
 
 export default function PokemonFichaPage() {
   const { idOrName } = useParams()
@@ -54,6 +63,40 @@ export default function PokemonFichaPage() {
     pokemon ? (pokemon.sprites.other?.['official-artwork']?.front_default ?? officialArtworkUrl(pokemon.id)) : null,
   )
 
+  // En escritorio, las 7 secciones se renderizan siempre, apiladas — las pestañas de
+  // arriba son anclas que hacen scroll (no interruptores de mostrar/ocultar). En
+  // móvil se mantiene el comportamiento de antes (una sección visible a la vez, ver
+  // .sectionInactiveMobile en el CSS): ahí sí tiene sentido por espacio de pantalla,
+  // como razonó David al pedir este cambio — ver
+  // .claude/memory/project_pokewebmax_progress.md.
+  const sectionRefs = useRef({})
+  const scrollToSection = (key) => {
+    setSection(key)
+    if (window.matchMedia('(min-width: 901px)').matches) {
+      sectionRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }
+
+  useEffect(() => {
+    if (!ficha) return undefined
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) setSection(entry.target.dataset.sectionKey)
+        }
+      },
+      // Banda de activación: justo debajo de las dos barras fijas (nav de la app +
+      // anclas de la ficha) hasta el 70% superior del viewport — evita que una
+      // sección larga entera cuente como "activa" solo por asomar un píxel abajo.
+      { rootMargin: '-130px 0px -70% 0px', threshold: 0 },
+    )
+    for (const el of Object.values(sectionRefs.current)) {
+      if (el) observer.observe(el)
+    }
+    return () => observer.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ficha])
+
   if (status === 'loading') return <p className={styles.status}>{t('ficha.loading')}</p>
   if (status === 'error') return <p className={styles.statusError}>{error}</p>
   if (!ficha) return null
@@ -71,6 +114,10 @@ export default function PokemonFichaPage() {
 
   return (
     <section className={styles.page}>
+      <Link to="/" className={styles.backLink}>
+        ← {t('ficha.backToList')}
+      </Link>
+
       {missingTotal > 0 && (
         <div className={styles.cacheBar}>
           <span>{t('ficha.cacheBarMissing', { count: missingTotal })}</span>
@@ -130,7 +177,7 @@ export default function PokemonFichaPage() {
               type="button"
               className={styles.tab}
               style={active ? { background: primaryColor, color: '#fff' } : undefined}
-              onClick={() => setSection(key)}
+              onClick={() => scrollToSection(key)}
             >
               {label[language]}
               {count > 0 && <span className={styles.badge}>{count}</span>}
@@ -140,23 +187,51 @@ export default function PokemonFichaPage() {
       </nav>
 
       <div className={styles.content}>
-        {section === 'DESC' && (
+        <section
+          id="ficha-DESC"
+          ref={(el) => (sectionRefs.current.DESC = el)}
+          data-section-key="DESC"
+          className={sectionClassName(styles, 'DESC', section)}
+        >
+          <h2 className={styles.sectionHeading}>{sectionLabel.DESC[language]}</h2>
           <div>
             {versions.length > 0 ? (
               <>
                 <div className={styles.versionPicker}>
-                  {versions.map((v) => (
-                    <button
-                      key={v.version}
-                      type="button"
-                      className={styles.versionChip}
-                      style={v.version === activeVersion?.version ? { background: primaryColor, color: '#fff' } : undefined}
-                      onClick={() => setVersion(v.version)}
-                    >
-                      {capitalize(v.version.replace(/-/g, ' '))}
-                      {!v.translated && <span className={styles.tag}>EN</span>}
-                    </button>
-                  ))}
+                  {versions.map((v) => {
+                    const active = v.version === activeVersion?.version
+                    const cover = gameCoverUrl(v.version)
+                    const versionLabel = capitalize(v.version.replace(/-/g, ' '))
+
+                    if (cover) {
+                      return (
+                        <button
+                          key={v.version}
+                          type="button"
+                          className={styles.versionCover}
+                          style={active ? { borderColor: primaryColor } : undefined}
+                          onClick={() => setVersion(v.version)}
+                          title={versionLabel}
+                        >
+                          <img src={cover} alt={versionLabel} />
+                          {!v.translated && <span className={styles.versionCoverTag}>EN</span>}
+                        </button>
+                      )
+                    }
+
+                    return (
+                      <button
+                        key={v.version}
+                        type="button"
+                        className={styles.versionChip}
+                        style={active ? { background: primaryColor, color: '#fff' } : undefined}
+                        onClick={() => setVersion(v.version)}
+                      >
+                        {versionLabel}
+                        {!v.translated && <span className={styles.tag}>EN</span>}
+                      </button>
+                    )
+                  })}
                 </div>
                 <p className={styles.quote}>
                   “{activeVersion.text}”
@@ -169,10 +244,16 @@ export default function PokemonFichaPage() {
               <p>{t('ficha.descriptionUnavailable')}</p>
             )}
           </div>
-        )}
+        </section>
 
-        {section === 'EVOS' && (
-          evolutionChain ? (
+        <section
+          id="ficha-EVOS"
+          ref={(el) => (sectionRefs.current.EVOS = el)}
+          data-section-key="EVOS"
+          className={sectionClassName(styles, 'EVOS', section)}
+        >
+          <h2 className={styles.sectionHeading}>{sectionLabel.EVOS[language]}</h2>
+          {evolutionChain ? (
             <div className={styles.evoList}>
               {evolutionStages(evolutionChain, t).map((stage, i) => (
                 <div key={stage.id}>
@@ -195,19 +276,48 @@ export default function PokemonFichaPage() {
             </div>
           ) : (
             <p>{t('ficha.evoChainMissing')}</p>
-          )
-        )}
+          )}
+        </section>
 
-        {section === 'STATS' && (
+        <section
+          id="ficha-STATS"
+          ref={(el) => (sectionRefs.current.STATS = el)}
+          data-section-key="STATS"
+          className={sectionClassName(styles, 'STATS', section)}
+        >
+          <h2 className={styles.sectionHeading}>{sectionLabel.STATS[language]}</h2>
           <div className={styles.statsPanel}>
             <StatRadarChart stats={pokemon.stats} color={primaryColor} />
-            <p className={styles.statsTotal}>
-              {t('ficha.statsTotal')} <strong>{pokemon.stats.reduce((sum, s) => sum + s.base_stat, 0)}</strong>
-            </p>
+            <div className={styles.statBars}>
+              {STAT_ORDER.map((name) => {
+                const value = pokemon.stats.find((s) => s.stat.name === name)?.base_stat ?? 0
+                return (
+                  <div key={name} className={styles.statBarRow}>
+                    <span className={styles.statBarLabel}>{STAT_LABELS[name]}</span>
+                    <div className={styles.statBarTrack}>
+                      <div
+                        className={styles.statBarFill}
+                        style={{ width: `${Math.min((value / MAX_STAT) * 100, 100)}%`, background: primaryColor }}
+                      />
+                    </div>
+                    <span className={styles.statBarValue}>{value}</span>
+                  </div>
+                )
+              })}
+              <p className={styles.statsTotal}>
+                {t('ficha.statsTotal')} <strong>{pokemon.stats.reduce((sum, s) => sum + s.base_stat, 0)}</strong>
+              </p>
+            </div>
           </div>
-        )}
+        </section>
 
-        {section === 'ABILITY' && (
+        <section
+          id="ficha-ABILITY"
+          ref={(el) => (sectionRefs.current.ABILITY = el)}
+          data-section-key="ABILITY"
+          className={sectionClassName(styles, 'ABILITY', section)}
+        >
+          <h2 className={styles.sectionHeading}>{sectionLabel.ABILITY[language]}</h2>
           <ul className={styles.cardList}>
             {abilities.map((a) => {
               const hidden = pokemon.abilities.find((slot) => slot.ability.name === a.name)?.is_hidden
@@ -230,9 +340,15 @@ export default function PokemonFichaPage() {
               )
             })}
           </ul>
-        )}
+        </section>
 
-        {section === 'MOVES' && (
+        <section
+          id="ficha-MOVES"
+          ref={(el) => (sectionRefs.current.MOVES = el)}
+          data-section-key="MOVES"
+          className={sectionClassName(styles, 'MOVES', section)}
+        >
+          <h2 className={styles.sectionHeading}>{sectionLabel.MOVES[language]}</h2>
           <ul className={styles.cardList}>
             {moves.map((m) => {
               const expanded = expandedMoves.has(m.id)
@@ -272,7 +388,14 @@ export default function PokemonFichaPage() {
                         <span>
                           {t('ficha.moveAccuracy')} <strong>{m.payload.accuracy != null ? `${m.payload.accuracy}%` : '-'}</strong>
                         </span>
-                        <span className={styles.tag}>{damageClassName(m.payload.damage_class.name, language)}</span>
+                        <span className={styles.tag}>
+                          <img
+                            className={styles.damageClassIcon}
+                            src={damageClassIconUrl(m.payload.damage_class.name)}
+                            alt=""
+                          />
+                          {damageClassName(m.payload.damage_class.name, language)}
+                        </span>
                       </div>
                       {expanded && (
                         <p className={styles.moveDescription}>
@@ -288,10 +411,16 @@ export default function PokemonFichaPage() {
               )
             })}
           </ul>
-        )}
+        </section>
 
-        {section === 'INFO' && (
-          species ? (
+        <section
+          id="ficha-INFO"
+          ref={(el) => (sectionRefs.current.INFO = el)}
+          data-section-key="INFO"
+          className={sectionClassName(styles, 'INFO', section)}
+        >
+          <h2 className={styles.sectionHeading}>{sectionLabel.INFO[language]}</h2>
+          {species ? (
             <dl className={styles.infoList}>
               <div className={styles.infoRow}>
                 <dt>{t('ficha.info.baseExp')}</dt>
@@ -344,10 +473,16 @@ export default function PokemonFichaPage() {
             </dl>
           ) : (
             <p>{t('ficha.cacheToViewInfo')}</p>
-          )
-        )}
+          )}
+        </section>
 
-        {section === 'FORM' && (
+        <section
+          id="ficha-FORM"
+          ref={(el) => (sectionRefs.current.FORM = el)}
+          data-section-key="FORM"
+          className={sectionClassName(styles, 'FORM', section)}
+        >
+          <h2 className={styles.sectionHeading}>{sectionLabel.FORM[language]}</h2>
           <ul className={styles.cardList}>
             {forms.map((f) => (
               <li key={f.id} className={styles.card}>
@@ -356,7 +491,7 @@ export default function PokemonFichaPage() {
               </li>
             ))}
           </ul>
-        )}
+        </section>
       </div>
       </div>
       </div>

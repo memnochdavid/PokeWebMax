@@ -22,13 +22,13 @@ function App() {
         </div>
         <div className={styles.links}>
           <NavLink to="/" end className={navLinkClassName}>
-            {t('nav.status')}
+            {t('nav.pokemon')}
           </NavLink>
           <NavLink to="/cache" className={navLinkClassName}>
             {t('nav.cache')}
           </NavLink>
-          <NavLink to="/pokemon" className={navLinkClassName}>
-            {t('nav.pokemon')}
+          <NavLink to="/status" className={navLinkClassName}>
+            {t('nav.status')}
           </NavLink>
         </div>
         <div className={styles.langSwitch} role="group" aria-label={t('nav.dataLanguageAria')}>
@@ -47,9 +47,9 @@ function App() {
 
       <main className={styles.main}>
         <Routes>
-          <Route path="/" element={<StatusPage />} />
+          <Route path="/" element={<PokemonListPage />} />
           <Route path="/cache" element={<CacheAllPage />} />
-          <Route path="/pokemon" element={<PokemonListPage />} />
+          <Route path="/status" element={<StatusPage />} />
           <Route path="/ficha/:idOrName" element={<PokemonFichaPage />} />
         </Routes>
       </main>

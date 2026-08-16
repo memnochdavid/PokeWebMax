@@ -1,7 +1,8 @@
 // Orden y ángulos fijos para que coincida con el diseño de referencia (Dexter): HP
-// arriba, y el resto en sentido horario cada 60°.
-const STAT_ORDER = ['hp', 'attack', 'defense', 'speed', 'special-defense', 'special-attack']
-const STAT_LABELS = {
+// arriba, y el resto en sentido horario cada 60°. Exportado porque PokemonFichaPage
+// reusa el mismo orden/etiquetas para la lista de barras que acompaña al radar.
+export const STAT_ORDER = ['hp', 'attack', 'defense', 'speed', 'special-defense', 'special-attack']
+export const STAT_LABELS = {
   hp: 'HP',
   attack: 'ATK',
   defense: 'DEF',
@@ -10,7 +11,7 @@ const STAT_LABELS = {
   'special-attack': 'SP.ATK',
 }
 
-const MAX_STAT = 200
+export const MAX_STAT = 200
 const SIZE = 240
 const CENTER = SIZE / 2
 const RADIUS = SIZE / 2 - 36

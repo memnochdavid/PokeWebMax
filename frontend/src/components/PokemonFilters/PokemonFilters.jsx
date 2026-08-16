@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { useLanguage } from '../../contexts/LanguageContext.jsx'
 import { ALL_TYPES, typeName } from '../../utils/pokemonTypes.js'
+import { SORTS } from '../../hooks/usePokemonBrowser.js'
 import styles from './PokemonFilters.module.css'
 
 const TOGGLES = [
@@ -11,7 +12,17 @@ const TOGGLES = [
   { key: 'regional', labelKey: 'filters.toggleRegional' },
 ]
 
-export default function PokemonFilters({ filters, onSetFilter, onReset, filtering, resultCount }) {
+export default function PokemonFilters({
+  filters,
+  onSetFilter,
+  onReset,
+  filtering,
+  resultCount,
+  sortKey,
+  onSetSortKey,
+  sortDirection,
+  onToggleSortDirection,
+}) {
   const { language } = useLanguage()
   const { t } = useTranslation()
 
@@ -49,6 +60,26 @@ export default function PokemonFilters({ filters, onSetFilter, onReset, filterin
             </option>
           ))}
         </select>
+
+        <div className={styles.sortGroup}>
+          <span className={styles.evoLabel}>{t('filters.sortBy')}</span>
+          <select className={styles.select} value={sortKey} onChange={(e) => onSetSortKey(e.target.value)}>
+            {Object.entries(SORTS).map(([key, { labelKey }]) => (
+              <option key={key} value={key}>
+                {t(labelKey)}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className={styles.toggle}
+            onClick={onToggleSortDirection}
+            aria-label={t(sortDirection === 'asc' ? 'filters.sortDirectionAsc' : 'filters.sortDirectionDesc')}
+            title={t(sortDirection === 'asc' ? 'filters.sortDirectionAsc' : 'filters.sortDirectionDesc')}
+          >
+            {sortDirection === 'asc' ? '↑' : '↓'}
+          </button>
+        </div>
       </div>
 
       <div className={styles.toggleRow}>

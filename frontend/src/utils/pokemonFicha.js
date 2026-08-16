@@ -39,15 +39,16 @@ export function speciesDisplayName(species, language, fallback) {
   return localizedEntry(species?.names, language, 'name') ?? fallback
 }
 
-// Todas las descripciones disponibles, una por versión de juego. PokeAPI tiene mucho
-// menos texto traducido a idiomas distintos del inglés en juegos antiguos (verificado:
-// Bulbasaur tiene 28 entradas en inglés —de Rojo a Escudo— pero solo 8 en español,
-// empezando en X/Y) — así que el fallback a inglés es POR VERSIÓN, no global: si el
-// idioma pedido no cubre un juego, se usa el inglés solo para ese juego en concreto
-// (marcado con `translated: false`) en vez de que el juego entero desaparezca del
-// selector. El texto duplicado entre versiones consecutivas se sigue colapsando en una
-// sola entrada (varias ediciones suelen compartir la misma redacción) para no acabar
-// con un selector de 20+ pastillas casi idénticas.
+// Todas las descripciones disponibles, una por versión de juego — sin colapsar ni
+// agrupar versiones con texto idéntico entre sí (Rojo/Azul, Diamante/Perla/Platino...
+// realmente compartían la misma redacción en los juegos, ver
+// .claude/memory/project_pokewebmax_progress.md) — cada versión real es su propia
+// entrada del selector, punto. PokeAPI tiene mucho menos texto traducido a idiomas
+// distintos del inglés en juegos antiguos (verificado: Bulbasaur tiene 28 entradas en
+// inglés —de Rojo a Escudo— pero solo 8 en español, empezando en X/Y) — así que el
+// fallback a inglés es POR VERSIÓN, no global: si el idioma pedido no cubre un juego,
+// se usa el inglés solo para ese juego en concreto (marcado con `translated: false`)
+// en vez de que el juego entero desaparezca del selector.
 //
 // `wikidexFlavorText` (viene de la ficha del backend, ver PokemonFichaAssembler) es un
 // tercer nivel de fallback SOLO para español, importado offline del dump de WikiDex:
@@ -65,7 +66,7 @@ export function flavorTextsByVersion(species, language, wikidexFlavorText = {}) 
     textByVersion.get(version)[lang] = text
   }
 
-  const seen = new Map()
+  const result = []
   for (const [version, texts] of textByVersion) {
     let translated = texts[language] !== undefined
     let text = translated ? texts[language] : texts.en
@@ -74,12 +75,10 @@ export function flavorTextsByVersion(species, language, wikidexFlavorText = {}) 
       translated = true
     }
     if (text === undefined) continue
-    if (!seen.has(text)) {
-      seen.set(text, { version, translated })
-    }
+    result.push({ version, text, translated })
   }
 
-  return Array.from(seen, ([text, { version, translated }]) => ({ version, text, translated }))
+  return result
 }
 
 // Descripción de una habilidad o movimiento a partir de su `flavor_text_entries`
@@ -115,6 +114,18 @@ const DAMAGE_CLASS_ES = { physical: 'Físico', special: 'Especial', status: 'Est
 export function damageClassName(slug, language) {
   if (language === 'es') return DAMAGE_CLASS_ES[slug] ?? slug
   return slug.length > 0 ? slug[0].toUpperCase() + slug.slice(1) : slug
+}
+
+// Iconos copiados de Pokedex_API (proyecto Android de referencia, solo lectura — ver
+// CLAUDE.md), no generados aquí. Estáticos porque solo hay 3 valores posibles.
+const DAMAGE_CLASS_ICONS = {
+  physical: new URL('../assets/damage-classes/physical.png', import.meta.url).href,
+  special: new URL('../assets/damage-classes/special.png', import.meta.url).href,
+  status: new URL('../assets/damage-classes/status.png', import.meta.url).href,
+}
+
+export function damageClassIconUrl(slug) {
+  return DAMAGE_CLASS_ICONS[slug] ?? null
 }
 
 const ROMAN_GENERATIONS = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9 }

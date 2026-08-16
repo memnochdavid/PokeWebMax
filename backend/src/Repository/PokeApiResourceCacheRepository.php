@@ -146,7 +146,7 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
      * slug de cada forma (ej. "charizard-mega-x", "vulpix-alola"); se detecta por
      * substring del sufijo, no hay campo explícito en PokeAPI para esto.
      *
-     * @return array<int, array{generation: ?int, legendary: bool, mythical: bool, hasMega: bool, hasGmax: bool, hasRegional: bool, evolutionChainId: ?int}>
+     * @return array<int, array{generation: ?int, legendary: bool, mythical: bool, hasMega: bool, hasGmax: bool, hasRegional: bool, evolutionChainId: ?int, captureRate: ?int}>
      */
     public function findSpeciesSummaries(): array
     {
@@ -156,7 +156,8 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
                     JSON_EXTRACT(payload, '$.is_legendary') AS is_legendary,
                     JSON_EXTRACT(payload, '$.is_mythical') AS is_mythical,
                     JSON_EXTRACT(payload, '$.varieties') AS varieties_json,
-                    JSON_EXTRACT(payload, '$.evolution_chain.url') AS evolution_chain_url
+                    JSON_EXTRACT(payload, '$.evolution_chain.url') AS evolution_chain_url,
+                    JSON_EXTRACT(payload, '$.capture_rate') AS capture_rate
              FROM pokeapi_resource_cache
              WHERE resource_type = 'pokemon-species'"
         )->fetchAllAssociative();
@@ -167,6 +168,7 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
             $evolutionChainUrl = json_decode((string) $row['evolution_chain_url']);
             $varieties = json_decode((string) $row['varieties_json'], true) ?? [];
             $varietyNames = array_map(static fn (array $v) => (string) ($v['pokemon']['name'] ?? ''), $varieties);
+            $captureRate = json_decode((string) $row['capture_rate']);
 
             $result[(int) $row['resource_id']] = [
                 'generation' => $generationUrl !== null ? PokeApiUrl::idFromUrl((string) $generationUrl) : null,
@@ -176,6 +178,42 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
                 'hasGmax' => $this->anyVarietyContains($varietyNames, '-gmax'),
                 'hasRegional' => $this->anyVarietyContains($varietyNames, ['-alola', '-galar', '-hisui', '-paldea']),
                 'evolutionChainId' => $evolutionChainUrl !== null ? PokeApiUrl::idFromUrl((string) $evolutionChainUrl) : null,
+                'captureRate' => $captureRate !== null ? (int) $captureRate : null,
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Solo para resourceType 'pokemon': peso, altura y suma de stats base — métricas
+     * de ordenación de la vista de lista (peso/altura/"total de stats"). Mismo criterio
+     * que findPokemonTypesById: proyección por JSON_EXTRACT en la propia consulta para
+     * no hidratar el payload completo de las ~1300 filas.
+     *
+     * @return array<int, array{weight: ?int, height: ?int, statsTotal: ?int}>
+     */
+    public function findPokemonListMetricsById(): array
+    {
+        $rows = $this->getEntityManager()->getConnection()->executeQuery(
+            "SELECT resource_id,
+                    JSON_EXTRACT(payload, '$.weight') AS weight,
+                    JSON_EXTRACT(payload, '$.height') AS height,
+                    JSON_EXTRACT(payload, '$.stats') AS stats_json
+             FROM pokeapi_resource_cache
+             WHERE resource_type = 'pokemon'"
+        )->fetchAllAssociative();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $weight = json_decode((string) $row['weight']);
+            $height = json_decode((string) $row['height']);
+            $stats = json_decode((string) $row['stats_json'], true) ?? [];
+
+            $result[(int) $row['resource_id']] = [
+                'weight' => $weight !== null ? (int) $weight : null,
+                'height' => $height !== null ? (int) $height : null,
+                'statsTotal' => $stats !== [] ? array_sum(array_column($stats, 'base_stat')) : null,
             ];
         }
 

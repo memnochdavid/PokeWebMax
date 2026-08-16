@@ -46,6 +46,24 @@
   border-color: var(--signal);
 }
 
+.sortGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.sortGroup .select {
+  flex: none;
+  min-width: 11rem;
+}
+
+.sortGroup .toggle {
+  padding: 0.5rem 0.7rem;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
 .toggleRow {
   display: flex;
   flex-wrap: wrap;

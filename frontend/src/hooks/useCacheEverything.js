@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { RESOURCE_GROUPS } from '../utils/pokeApiResources.js'
 import { cacheAllPending } from '../utils/cachePokeApiResource.js'
 import i18n from '../i18n.js'
+import { invalidatePokemonCache } from '../utils/pokemonListCache.js'
 
 const ALL_RESOURCE_TYPES = RESOURCE_GROUPS.flatMap((group) => group.resources.map((r) => r.type))
 
@@ -31,6 +32,7 @@ export default function useCacheEverything() {
       setResourcesDone((prev) => prev + 1)
     }
 
+    invalidatePokemonCache() // recorre los 49 tipos, siempre incluye pokemon/pokemon-species
     setCurrentType(null)
     setStatus('done')
   }, [])

@@ -45,6 +45,7 @@ class PokemonListService
      *     id: int, name: string, cached: bool, fetchedAt: ?string, types: string[],
      *     generation: ?int, legendary: bool, mythical: bool,
      *     hasMega: bool, hasGmax: bool, hasRegional: bool, evolutionStages: ?int,
+     *     captureRate: ?int, weight: ?int, height: ?int, statsTotal: ?int,
      * }>
      */
     public function listAll(): array
@@ -54,12 +55,14 @@ class PokemonListService
         $typesById = $this->repository->findPokemonTypesById();
         $speciesSummaries = $this->repository->findSpeciesSummaries();
         $chainDepths = $this->repository->findEvolutionChainDepths();
+        $listMetrics = $this->repository->findPokemonListMetricsById();
 
         return array_map(
-            function (array $entry) use ($cachedFetchedAt, $typesById, $speciesSummaries, $chainDepths) {
+            function (array $entry) use ($cachedFetchedAt, $typesById, $speciesSummaries, $chainDepths, $listMetrics) {
                 $fetchedAt = $cachedFetchedAt[$entry['id']] ?? null;
                 $summary = $speciesSummaries[$entry['id']] ?? null;
                 $evolutionChainId = $summary['evolutionChainId'] ?? null;
+                $metrics = $listMetrics[$entry['id']] ?? null;
 
                 return [
                     'id' => $entry['id'],
@@ -74,6 +77,10 @@ class PokemonListService
                     'hasGmax' => $summary['hasGmax'] ?? false,
                     'hasRegional' => $summary['hasRegional'] ?? false,
                     'evolutionStages' => $evolutionChainId !== null ? ($chainDepths[$evolutionChainId] ?? null) : null,
+                    'captureRate' => $summary['captureRate'] ?? null,
+                    'weight' => $metrics['weight'] ?? null,
+                    'height' => $metrics['height'] ?? null,
+                    'statsTotal' => $metrics['statsTotal'] ?? null,
                 ];
             },
             $entries,

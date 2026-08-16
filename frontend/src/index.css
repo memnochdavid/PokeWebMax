@@ -15,7 +15,10 @@
   --error: #d43f3f;
   --bg: var(--chassis-950);
 
-  font: 16px/1.5 var(--font-body);
+  /* 18px en vez del default de 16px: casi todo el tamaño de la app está en rem, así
+     que esto escala interfaz Y texto a la vez sin tocar cada regla suelta (pedido de
+     David: "un poco más grande, con letras más visibles"). */
+  font: 18px/1.5 var(--font-body);
   color-scheme: light dark;
   color: var(--text);
   background: var(--bg);
