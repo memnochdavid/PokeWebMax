@@ -286,6 +286,72 @@ archivo libremente y cableó el código sin problema. **How to apply:** mantener
 misma línea si se piden más assets con copyright (audio, más sprites, texturas...) en
 el futuro.
 
+## Transparencia del banner animado — HECHO 2026-08-16
+
+Los `.webm` de `animated/` se veían con fondo blanco en vez de transparente. Causa: el
+elemento `<video>` de HTML5 no puede mostrar canal alfa aunque el archivo lo tenga —
+limitación del elemento, no de los archivos (encaja con que `SpriteWebm.kt` en Dexter
+necesitara hacks de "Setting Opaque to false" en el TextureView de Android, indicio de
+que sí llevan alfa real). Se presentaron dos opciones a David (chroma-key por canvas,
+sencillo pero puede recortar blancos reales del sprite; vs. WebCodecs `VideoDecoder`
+con el alfa real, solo Chrome/Edge y mucho más complejo) — **eligió chroma-key**.
+
+Implementado: `hooks/useChromaKeyVideo.js` (dibuja cada frame del `<video>` oculto en
+un `<canvas>`, y por píxel hace transparente lo casi-blanco con un umbral suave —
+`WHITE_LOW=235`/`WHITE_HIGH=250` — para no dejar un corte duro en el borde). `
+PokemonHeroSprite` ahora renderiza el `<video>` real oculto (fuera de pantalla, no
+`display:none`, por compatibilidad con Safari/iOS al capturar frames) + el `<canvas>`
+visible con el resultado. **Trade-off asumido y conocido:** puede recortar partes
+genuinamente blancas del propio sprite (ojos, dientes, pelaje claro) — si se nota
+mucho en la práctica, ajustar `WHITE_LOW`/`WHITE_HIGH` en ese archivo, o replantear
+hacia WebCodecs si algún día compensa la complejidad.
+
+## Rediseño visual de la ficha para imitar a Dexter — HECHO 2026-08-16
+
+David compartió 9 capturas de pantalla suyas (`/home/david/Escritorio/capturas/`, ficha
+de Bulbasaur en Dexter) y pidió imitar esa apariencia. Dexter tiene 9 pestañas:
+Descripción, Evolución, Stats, Habilidades, Movimientos, Tipos, Info, Ubicaciones,
+Sprites — más que las 6 que teníamos. Rediseñado con lo que el ensamblador ya resuelve
+(quedan pendientes Tipos/Ubicaciones/Sprites, ver abajo):
+
+- **Cabecera**: dos bandas horizontales de color por tipo (antes degradado diagonal),
+  banda inferior sólida con nombre + número + género + chip de generación (`G-N`,
+  `utils/pokemonFicha.js#generationNumber`, parsea `species.generation.name`) + chips
+  de altura/peso — replica el layout de Dexter. **Deliberadamente NO se replicaron**
+  los botones decorativos de pokeball/shiny ni los fondos animados por tipo (18
+  overlays, ver `RUTA_FONDOS_ANIMADOS.md`) — fuera de alcance para este incremento.
+- **Pestañas**: de subrayado a píldoras (fondo del color de tipo cuando está activa),
+  como en Dexter.
+- **Descripción**: ahora con selector de versión de juego (texto, no carátulas — no se
+  van a descargar carátulas de juego, mismo criterio que con los sprites). Colapsa
+  versiones con texto idéntico en una sola pastilla
+  (`spanishFlavorTextsByVersion`) en vez de mostrar 20+ casi duplicadas.
+- **Evolución**: de una línea de texto plana a cards apiladas con sprite + nombre +
+  número (navegables, enlazan a la ficha de esa etapa) conectadas por el método de
+  evolución (`evolutionStages` en `utils/pokemonFicha.js` — deriva "Nivel N" / "Usar
+  X" / "Intercambio" del payload de `evolution-chain`, antes solo se listaban nombres).
+- **Stats**: de barras a radar hexagonal real (`components/StatRadarChart`, SVG puro,
+  sin librería — orden y ángulos fijos para que coincida visualmente: HP arriba,
+  sentido horario) + total.
+- **Habilidades/Movimientos**: de una línea con nombre a cards con datos reales del
+  payload ya cacheado (`a.payload`/`m.payload`, sin llamada nueva) — habilidad con
+  efecto corto en español (fallback inglés) y tag "Oculta"; movimiento con
+  Pot./PP/Prec./clase de daño + `TypeBadge`.
+- **Info (pestaña nueva)**: Exp. Base, barra de género (male/female desde
+  `species.gender_rate`, en octavos), barra de captura, Felicidad Base, Grupo Huevo,
+  Crecimiento, Hábitat, Pasos Eclosión (fórmula `(hatch_counter+1)*255` — verificada
+  contra el `~5355` de Bulbasaur en la captura, coincide exacto). Todo ya estaba en
+  `species`, cacheado, sin backend nuevo.
+
+**Pendiente (no en este incremento):** pestañas Tipos (necesita el recurso `type`, ver
+punto 9 de arquitectura), Ubicaciones (necesita `pokemon/{id}/encounters`, no
+resuelto por el ensamblador) y Sprites (selector de variante — factible con lo que ya
+hay, simplemente no se ha hecho todavía). Verificado por curl que `species` trae todos
+los campos usados (`capture_rate`, `gender_rate`, `egg_groups`, `growth_rate`,
+`habitat`, `generation`, `genera`, `flavor_text_entries`) y que compila sin errores —
+**no verificado a ojo en navegador**, mismo hueco de `claude-in-chrome` de toda la
+sesión.
+
 ## Pendiente / siguiente paso natural
 
 - No hay vistas de listado/detalle navegable para ningún recurso salvo Pokémon — el resto

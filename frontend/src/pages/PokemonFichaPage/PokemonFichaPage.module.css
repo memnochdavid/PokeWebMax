@@ -20,16 +20,37 @@
 
 .hero {
   display: flex;
-  align-items: center;
-  gap: 1.5rem;
+  flex-direction: column;
   border-radius: 1rem;
-  padding: 1.5rem;
+  overflow: hidden;
   color: #fff;
+}
+
+.heroBands {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 15rem;
+  padding-top: 1rem;
 }
 
 .sprite {
   object-fit: contain;
-  flex-shrink: 0;
+}
+
+.infoBand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 1.25rem 1rem 1.5rem;
+  text-align: center;
+}
+
+.nameRow {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
 }
 
 .name {
@@ -41,10 +62,29 @@
   opacity: 0.85;
 }
 
-.types {
+.genus {
+  margin: 0;
+  opacity: 0.85;
+}
+
+.genChip {
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.metrics {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.75rem;
   margin-top: 0.5rem;
+}
+
+.metricChip {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 0.3rem 0.85rem;
+  font-size: 0.85rem;
 }
 
 .cacheBar {
@@ -76,27 +116,19 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.3);
-  padding-bottom: 0.75rem;
 }
 
-.tab,
-.tabActive {
+.tab {
   cursor: pointer;
-  border: none;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 999px;
   background: transparent;
   color: inherit;
   font: inherit;
-  opacity: 0.6;
-  padding: 0.25rem 0.5rem;
+  padding: 0.4rem 0.9rem;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-}
-
-.tabActive {
-  opacity: 1;
-  font-weight: 700;
 }
 
 .badge {
@@ -112,52 +144,168 @@
   line-height: 1.6;
 }
 
-.stats {
-  list-style: none;
+.versionPicker {
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
 }
 
-.stats li {
-  display: grid;
-  grid-template-columns: 6rem 1fr 2.5rem;
+.versionChip {
+  cursor: pointer;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.25rem 0.7rem;
+  text-transform: capitalize;
+}
+
+.quote {
+  font-style: italic;
+  border-left: 3px solid rgba(128, 128, 128, 0.3);
+  padding-left: 1rem;
+}
+
+.evoList {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.evoCard {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 0.75rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.evoSprite {
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.evoNumber {
+  display: block;
+  opacity: 0.7;
+  font-size: 0.85rem;
+}
+
+.evoConnector {
+  font-size: 0.8rem;
+  opacity: 0.7;
+  padding: 0.25rem 0;
+}
+
+.statsPanel {
+  display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 0.5rem;
 }
 
-.statName {
-  text-transform: capitalize;
-  opacity: 0.8;
-  font-size: 0.85rem;
+.statsTotal {
+  opacity: 0.85;
 }
 
-.statBarTrack {
-  height: 0.5rem;
-  border-radius: 999px;
-  background: rgba(128, 128, 128, 0.25);
-  overflow: hidden;
-}
-
-.statBarFill {
-  display: block;
-  height: 100%;
-  background: #3b82f6;
-}
-
-.evoChain {
-  font-size: 1.1rem;
-  text-transform: capitalize;
-}
-
-.list {
+.cardList {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.6rem;
+}
+
+.card {
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.tag {
+  background: rgba(128, 128, 128, 0.2);
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.moveStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  opacity: 0.9;
 }
 
 .notCached {
   opacity: 0.6;
   font-size: 0.85rem;
+}
+
+.infoList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.infoRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.infoRow dt {
+  opacity: 0.7;
+  font-size: 0.9rem;
+}
+
+.infoRow dd {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.genderBar,
+.captureBar {
+  width: 8rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  overflow: hidden;
+  display: flex;
+  background: rgba(128, 128, 128, 0.25);
+}
+
+.genderMale {
+  background: #3b82f6;
+  height: 100%;
+}
+
+.genderFemale {
+  background: #ec4899;
+  height: 100%;
+}
+
+.captureFill {
+  background: #ef4444;
+  height: 100%;
 }
