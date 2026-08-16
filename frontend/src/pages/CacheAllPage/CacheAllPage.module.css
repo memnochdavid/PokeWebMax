@@ -1,38 +1,49 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
   padding: 2rem;
-  max-width: 32rem;
+  max-width: 34rem;
   margin: 0 auto;
+  width: 100%;
 }
 
 .title {
   font-size: 1.75rem;
-  font-weight: 700;
+  margin-bottom: 0.25rem;
 }
 
 .group {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
 }
 
 .groupTitle {
-  font-size: 1.1rem;
-  font-weight: 700;
-  opacity: 0.75;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.3);
-  padding-bottom: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.4rem;
 }
 
 .row {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 1rem;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem;
   border-radius: 0.5rem;
-  border: 1px solid rgba(128, 128, 128, 0.3);
+  background: var(--chassis-900);
+  border: 1px solid var(--line);
+}
+
+.master {
+  border-color: var(--signal);
+  background: color-mix(in srgb, var(--signal) 8%, var(--chassis-900));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--signal) 25%, transparent);
 }
 
 .rowHeader {
@@ -44,16 +55,28 @@
 
 .rowLabel {
   font-weight: 600;
+  color: var(--text-h);
+  font-size: 0.92rem;
 }
 
 .button {
   cursor: pointer;
-  border: 1px solid rgba(128, 128, 128, 0.3);
-  border-radius: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: transparent;
-  color: inherit;
-  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  background: var(--chassis-800);
+  color: var(--text-h);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.button:hover:not(:disabled) {
+  border-color: var(--signal);
+  color: var(--signal);
 }
 
 .button:disabled {
@@ -69,22 +92,41 @@
 
 .track {
   flex: 1;
-  height: 0.5rem;
-  border-radius: 0.25rem;
-  background: rgba(128, 128, 128, 0.2);
+  height: 0.4rem;
+  border-radius: 0.2rem;
+  background: repeating-linear-gradient(
+    to right,
+    var(--chassis-800) 0,
+    var(--chassis-800) 3px,
+    transparent 3px,
+    transparent 5px
+  );
   overflow: hidden;
+  border: 1px solid var(--line);
 }
 
 .bar {
   height: 100%;
-  background: currentColor;
+  background: var(--signal);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--signal) 70%, transparent);
   transition: width 0.2s ease;
 }
 
+.progress span {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text);
+  white-space: nowrap;
+}
+
 .done {
-  color: #22c55e;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--ok);
 }
 
 .error {
-  color: #ef4444;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--error);
 }

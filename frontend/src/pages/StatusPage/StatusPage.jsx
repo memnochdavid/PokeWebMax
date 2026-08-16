@@ -7,17 +7,20 @@ export default function StatusPage() {
 
   return (
     <section className={styles.page}>
-      <h1 className={styles.title}>PokeWebMax</h1>
+      <div className={styles.panel}>
+        <span className="eyebrow">Diagnóstico del sistema</span>
+        <h1 className={styles.title}>PokeWebMax</h1>
 
-      <div className={styles.statusList}>
-        <StatusRow label="Frontend" state="ok" value="funcionando" />
-        <StatusRow label="Backend API" state={backend.state} value={backend.value} />
-        <StatusRow label="Base de datos" state={database.state} value={database.value} />
+        <div className={styles.statusList}>
+          <StatusRow label="Frontend" state="ok" value="funcionando" />
+          <StatusRow label="Backend API" state={backend.state} value={backend.value} />
+          <StatusRow label="Base de datos" state={database.state} value={database.value} />
+        </div>
+
+        <button type="button" className={styles.retry} onClick={retry}>
+          Volver a comprobar
+        </button>
       </div>
-
-      <button type="button" className={styles.retry} onClick={retry}>
-        Volver a comprobar
-      </button>
     </section>
   )
 }

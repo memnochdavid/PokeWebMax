@@ -42,6 +42,8 @@ const TYPE_NAMES_ES = {
   fairy: 'Hada',
 }
 
+export const ALL_TYPES = Object.keys(TYPE_COLORS)
+
 export function typeColor(type) {
   return TYPE_COLORS[type] ?? '#aaaaaa'
 }

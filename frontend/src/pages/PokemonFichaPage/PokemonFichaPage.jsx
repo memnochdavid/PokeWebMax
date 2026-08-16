@@ -51,6 +51,16 @@ export default function PokemonFichaPage() {
 
   return (
     <section className={styles.page}>
+      {missingTotal > 0 && (
+        <div className={styles.cacheBar}>
+          <span>Faltan {missingTotal} recursos por cachear para completar esta ficha.</span>
+          <button type="button" onClick={cacheMissing} disabled={caching}>
+            {caching ? 'Cacheando…' : 'Cachear todo lo que falta'}
+          </button>
+        </div>
+      )}
+
+      <div className={styles.layout}>
       <header className={styles.hero}>
         <div
           className={styles.heroBands}
@@ -58,15 +68,17 @@ export default function PokemonFichaPage() {
             background: `linear-gradient(to bottom, ${primaryColor} 0%, ${primaryColor} 58%, ${secondaryColor} 58%, ${secondaryColor} 100%)`,
           }}
         >
-          <PokemonHeroSprite
-            className={styles.sprite}
-            animatedSrc={animatedSpriteUrl(pokemon.name)}
-            staticSrc={heroImage.src}
-            staticOnError={heroImage.onError}
-            alt={pokemon.name}
-            width={200}
-            height={200}
-          />
+          <div className={`${styles.scanChamber} hud-frame hud-frame--animated`} style={{ color: '#fff' }}>
+            <PokemonHeroSprite
+              className={styles.sprite}
+              animatedSrc={animatedSpriteUrl(pokemon.name)}
+              staticSrc={heroImage.src}
+              staticOnError={heroImage.onError}
+              alt={pokemon.name}
+              width={200}
+              height={200}
+            />
+          </div>
         </div>
 
         <div className={styles.infoBand} style={{ background: primaryColor }}>
@@ -87,15 +99,7 @@ export default function PokemonFichaPage() {
         </div>
       </header>
 
-      {missingTotal > 0 && (
-        <div className={styles.cacheBar}>
-          <span>Faltan {missingTotal} recursos por cachear para completar esta ficha.</span>
-          <button type="button" onClick={cacheMissing} disabled={caching}>
-            {caching ? 'Cacheando…' : 'Cachear todo lo que falta'}
-          </button>
-        </div>
-      )}
-
+      <div className={styles.main}>
       <nav className={styles.tabs}>
         {FICHA_SECTIONS.map(({ key, label, missingKey }) => {
           const count = sectionMissingCount(missing, missingKey)
@@ -298,6 +302,8 @@ export default function PokemonFichaPage() {
             ))}
           </ul>
         )}
+      </div>
+      </div>
       </div>
     </section>
   )

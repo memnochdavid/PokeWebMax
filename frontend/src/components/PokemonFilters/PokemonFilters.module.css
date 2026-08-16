@@ -1,0 +1,122 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--chassis-900);
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+}
+
+.searchRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.search {
+  flex: 2;
+  min-width: 12rem;
+}
+
+.select {
+  flex: 1;
+  min-width: 8rem;
+}
+
+.search,
+.select {
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-h);
+  background: var(--chassis-800);
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  padding: 0.55rem 0.7rem;
+}
+
+.search::placeholder {
+  color: var(--text);
+  opacity: 0.6;
+}
+
+.search:focus,
+.select:focus {
+  border-color: var(--signal);
+}
+
+.toggleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.toggle {
+  cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--chassis-800);
+  color: var(--text);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+  padding: 0.35rem 0.75rem;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.toggle:hover {
+  border-color: var(--signal);
+}
+
+.toggleActive {
+  border-color: var(--signal);
+  background: var(--signal);
+  color: var(--signal-contrast);
+}
+
+.evoGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding-left: 0.5rem;
+  margin-left: 0.2rem;
+  border-left: 1px solid var(--line);
+}
+
+.evoLabel {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.68rem;
+  color: var(--text);
+  opacity: 0.7;
+  margin-right: 0.15rem;
+}
+
+.evoGroup .toggle {
+  padding: 0.35rem 0.6rem;
+}
+
+.clear {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: var(--error);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.7rem;
+  padding: 0.35rem 0.5rem;
+  margin-left: auto;
+}
+
+.resultCount {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text);
+  opacity: 0.75;
+}

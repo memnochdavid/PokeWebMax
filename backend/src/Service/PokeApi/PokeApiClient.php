@@ -47,6 +47,42 @@ class PokeApiClient
         );
     }
 
+    /**
+     * Cachea varios ids del mismo resourceType a la vez lanzando todas las peticiones
+     * a PokeAPI en paralelo, en vez de una a una: `request()` con el HttpClient de
+     * Symfony no bloquea hasta que se lee el cuerpo (`toArray()`), así que disparar
+     * todas antes de leer ninguna las deja correr concurrentemente por debajo
+     * (multiplexado por curl, ver `max_host_connections` en config/packages/
+     * framework.yaml). Es lo que hace rápido el cacheo por lotes frente al cacheo
+     * secuencial de uno en uno.
+     *
+     * @param int[] $ids
+     * @return array<int, ?array> payload indexado por id; null si esa id dio 404
+     */
+    public function fetchManyResources(string $resourceType, array $ids): array
+    {
+        $responses = [];
+        foreach ($ids as $id) {
+            $responses[$id] = $this->httpClient->request('GET', self::BASE_URL . $resourceType . '/' . $id);
+        }
+
+        $results = [];
+        foreach ($responses as $id => $response) {
+            try {
+                $results[$id] = $response->toArray();
+            } catch (ClientExceptionInterface $e) {
+                if ($e->getResponse()->getStatusCode() === 404) {
+                    $results[$id] = null;
+                    continue;
+                }
+
+                throw $e;
+            }
+        }
+
+        return $results;
+    }
+
     private function get(string $resourceType, string $idOrName): array
     {
         try {

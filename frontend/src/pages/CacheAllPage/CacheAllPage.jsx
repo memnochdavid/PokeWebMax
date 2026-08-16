@@ -47,9 +47,10 @@ export default function CacheAllPage() {
 
   return (
     <section className={styles.page}>
+      <span className="eyebrow">Adquisición de datos</span>
       <h1 className={styles.title}>Cachear PokeAPI</h1>
 
-      <div className={styles.row}>
+      <div className={`${styles.row} ${styles.master}`}>
         <div className={styles.rowHeader}>
           <span className={styles.rowLabel}>Todo (49 recursos)</span>
           <button

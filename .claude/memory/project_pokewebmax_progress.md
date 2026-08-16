@@ -352,6 +352,207 @@ los campos usados (`capture_rate`, `gender_rate`, `egg_groups`, `growth_rate`,
 **no verificado a ojo en navegador**, mismo hueco de `claude-in-chrome` de toda la
 sesión.
 
+## Rediseño visual completo de la UI — HECHO 2026-08-16
+
+David pidió usar los plugins `frontend-design`/`superdesign` (recién instalados, requerían
+reiniciar sesión para aparecer — ya disponibles) para rediseñar la app entera a "algo
+súper guay". Se siguió el proceso de `frontend-design`: brainstorm de tokens → crítica
+frente al brief → implementación. Se descartó deliberadamente evitar los 3 looks
+genéricos de IA que la skill señala como sobreusados (crema+serif+terracota,
+negro+neón verde/bermellón, broadsheet radius-0).
+
+**Concepto elegido: "terminal de escaneo Pokédex"** — justificado por el propio dominio
+(la app es literalmente un Pokédex/escáner), no un estilo arbitrario:
+- **Color**: chasis gris-grafito (`--chassis-950/900/800`, no negro puro) +
+  `--signal` ámbar `#ffb238` (dark) / `#b8630a` (light) como "LED de encendido" fijo
+  (focus, CTAs, activos) — deliberadamente ni verde-neón ni bermellón para no caer en
+  el cliché de "negro + acento neón único". Los colores oficiales por tipo
+  (`TYPE_COLORS`, sin tocar) siguen siendo el acento dinámico por Pokémon.
+- **Tipografía** (Google Fonts vía `<link>` en `index.html`, sin fuentes locales): *Chakra
+  Petch* (display técnico, títulos/nombre de Pokémon), *IBM Plex Sans* (cuerpo),
+  *IBM Plex Mono* (números de Pokédex, stats, badges, valores — refuerza la idea de
+  "lectura de instrumento").
+- **Firma visual única**: `.hud-frame` en `index.css` — marco de esquinas tipo
+  visor/HUD hecho con 8 gradientes CSS puros (sin marcado extra), tintado por
+  `currentColor`/`style={{color}}` desde el JSX. Solo se usa en dos sitios (a propósito,
+  para no saturar): siempre visible + animado (`hud-frame--animated`) alrededor del
+  sprite de cabecera en `PokemonFichaPage` (`.scanChamber`), y oculto por defecto,
+  revelado al hover/focus (`hud-frame--hover`) en el sprite de `PokemonCard` de la
+  lista — combinador `.card:hover :global(.hud-frame--hover)::before` en el módulo CSS.
+
+Tocados: `index.html` (fuentes), `index.css` (tokens, utilidades globales `.eyebrow` y
+`.hud-frame*`, fondo con grid sutil + focus-visible + `::selection`), `App.jsx`/`.module.css`
+(nav como tira de botones de dispositivo, wordmark con LED parpadeante), y las 4
+páginas + `PokemonCard`/`TypeBadge`/`StatusRow` (chips/badges reskineados a mono,
+barras de progreso/género/captura como tiras LED segmentadas, radar de stats con
+`filter: drop-shadow` a color de tipo). **No se tocó lógica** (hooks, ensamblador,
+endpoints) — solo JSX estructural mínimo (wrappers para el marco HUD, eyebrows) y CSS.
+
+**Verificado:** Vite compila sin errores (`docker compose logs frontend`, tras corregir
+un `<div>` sin cerrar en `StatusPage.jsx` detectado por el propio error de Vite), las 4
+rutas (`/`, `/cache`, `/pokemon`, `/ficha/25`) devuelven 200 sin "Internal Server
+Error". **No verificado a ojo en navegador** — se intentó `claude-in-chrome` de nuevo
+en esta sesión (tras la skill sí cargar esta vez) y el mensaje fue "extensión no
+conectada en esta sesión", igual que las veces anteriores; no hay Chromium/Puppeteer
+disponible en el host tampoco para capturar screenshot por otra vía. David debe revisar
+`http://localhost:5174` a ojo y dar feedback — sigue siendo el mismo hueco de
+verificación visual de toda la vida de este proyecto.
+
+**Pendiente de este rediseño:** `.evoList`/`.evoConnector` y el resto de paneles no se
+probaron con datos reales variados (p.ej. Eevee con evolución ramificada, ya sabido no
+soportado por `flattenEvolutionChain`, ver sección anterior) — solo se comprobó que
+compila. Si el look no convence a David en algún punto concreto, iterar sobre ese
+archivo puntual en vez de replantear el sistema de tokens entero.
+
+## Lista de Pokémon: paginada por generación + filtros — HECHO 2026-08-16
+
+David pidió que `/pokemon` fuera lazy y paginada por generaciones, con búsqueda por
+nombre/tipo1/tipo2/mega/gigamax/regional/legendario/singular/nº de etapas evolutivas
+(1-3). Se clonó `Dexter` (Android, solo lectura) a scratchpad para ver
+`GenerationPagerScreen`/`MenuBusqueda.kt`: confirmó que el Android solo filtra por
+nombre+tipo1+tipo2 (nada de mega/gigamax/regional/legendario/singular/etapas — esos
+filtros son nuevos, no existían ya resueltos ahí) y que "paginar por generación" en
+Android es literalmente un pager que carga+cachea por generación. **"Singular" es el
+término oficial en español para "Mythical Pokémon"** (`species.is_mythical`) — mismo
+patrón que "Legendario" = `is_legendary`.
+
+**Backend** — todo derivado de caché ya existente, sin llamadas nuevas a PokeAPI:
+- `PokeApiResourceCacheRepository::findSpeciesSummaries()`: por cada fila
+  `pokemon-species` cacheada, `JSON_EXTRACT` saca `generation.url` (→ id 1-9),
+  `is_legendary`, `is_mythical`, `varieties` (→ `hasMega`/`hasGmax`/`hasRegional` por
+  substring del slug: `-mega`, `-gmax`, `-alola`/`-galar`/`-hisui`/`-paldea`) y
+  `evolution_chain.url`. Sin hidratar el payload completo (mismo cuidado de memoria de
+  siempre).
+- `findEvolutionChainDepths()`: para `evolution-chain` (solo ~540 filas, payloads
+  pequeños a diferencia de `pokemon-species`) sí decodifica el payload completo y
+  calcula la profundidad recursiva de `chain.evolves_to` (rama más larga) → nº de
+  etapas. **Limitación conocida:** de las 541 cadenas solo 3 están cacheadas ahora
+  mismo (mismo hueco que siempre — la mayoría de fichas no se han visitado/cacheado
+  individualmente); para el resto `evolutionStages` sale `null` y ese Pokémon
+  simplemente no coincide con ningún filtro de etapas hasta que se cachee
+  `evolution-chain` en bloque desde `/cache`. David avisado de esto.
+- `PokemonListService::listAll()` fusiona todo lo anterior en cada entrada de
+  `GET /api/pokemon`: añade `generation`, `legendary`, `mythical`, `hasMega`,
+  `hasGmax`, `hasRegional`, `evolutionStages` a lo que ya devolvía (`id`, `name`,
+  `types`, `cached`, `fetchedAt`). Verificado por curl: Bulbasaur `evolutionStages:3`,
+  Charizard `hasMega:true, hasGmax:true`, Eevee `hasGmax:true` (por Eevee-Gmax).
+
+**Frontend** — `usePokemonBrowser` (hook nuevo, estado de filtros + generación activa
++ derivación memoizada): si hay algún filtro/búsqueda activo se muestra una lista
+plana con TODOS los resultados (cruzando todas las generaciones); si no, se muestra
+solo la generación activa — mismo patrón que el pager de Android (que cambia a lista
+plana bajo filtro). Esto es lo que hace la vista "lazy": nunca se montan los ~1025
+`PokemonCard` a la vez, salvo que un filtro muy amplio lo produzca. `PokemonCard`
+también gana `loading="lazy" decoding="async"` en el `<img>` como capa extra.
+Componentes nuevos `GenerationPager` (pestañas número romano + región en español,
+ej. "V Teselia" — `utils/generations.js`) y `PokemonFilters` (input nombre, 2
+selects de tipo, chips toggle para legendario/singular/mega/gigamax/regional, selector
+1/2/3 de etapas, contador de resultados y botón limpiar). `PokemonListPage` queda
+como composición pura de estos + el hook, sin lógica propia (cumple decisión 7).
+
+**Verificado:** backend por curl (`generation`/`legendary`/`hasMega`/etc. correctos
+contra Bulbasaur/Charizard/Eevee), frontend compila sin errores en las 4 rutas
+(comprobado también pidiendo directamente los módulos nuevos a Vite, sin
+`PARSE_ERROR`/`Failed to resolve`). **No verificado a ojo en navegador** — mismo hueco
+de `claude-in-chrome` de siempre, no conectado en esta sesión tampoco.
+
+**Pendiente:** el filtro de etapas evolutivas es poco útil hasta que se cachee más
+`evolution-chain` en bloque; no hay debounce en el input de búsqueda (con 1025 items
+en memoria el filtrado es barato, no debería notarse, pero si se nota lento añadir
+`useDeferredValue` o debounce al `query`).
+
+## Ajuste de la ficha para desktop + quitar fondo de cuadrícula — HECHO 2026-08-16
+
+David compartió 9 capturas nuevas de Dexter (`/home/david/Escritorio/capturas/`, ficha
+de Bulbasaur — mismo set de referencia visual que el rediseño del 16-08 pero pidiendo
+imitarlo de nuevo) con dos quejas concretas sobre lo que se acababa de construir con
+`frontend-design` (ver sección "Rediseño visual completo de la UI" arriba): **(1)** la
+ficha desaprovecha mucho espacio horizontal en desktop (las capturas son de móvil, una
+sola columna — David es consciente y aun así señala que en escritorio eso deja los
+lados vacíos), **(2)** el fondo de cuadrícula (`body { background-image: grid... }` en
+`index.css`) "no mola nada".
+
+**No se descartó el sistema de tokens** (ámbar/chasis-grafito/Chakra Petch+IBM Plex,
+marco HUD) montado en la sesión anterior — David no pidió tirarlo, solo señaló estos
+dos problemas concretos + "imita las capturas". Se interpretó como: adoptar el
+lenguaje visual redondeado/con sombra suave de Dexter (tarjetas con esquinas grandes,
+pills de tipo, layout de la cabecera con banda dual por tipo — esto último YA
+coincidía con lo que había) pero resuelto para desktop, no un cambio de paleta.
+
+- `index.css`: eliminado el `background-image` de rejilla de `body` — solo queda el
+  resplandor radial ámbar sutil ya existente (opacidad bajada de 10% a 7%).
+- `PokemonFichaPage`: layout reestructurado a grid de 2 columnas
+  (`.layout { grid-template-columns: 340px 1fr }`, `max-width` de la página subido de
+  720px a 1280px). Columna izquierda = tarjeta hero (`position: sticky; top: 5.5rem`,
+  ahora con `border-radius: 1.25rem` + sombra suave en vez de banner de ancho
+  completo). Columna derecha = pestañas + contenido. El aviso de "faltan recursos por
+  cachear" se subió fuera del grid, a todo el ancho, arriba del todo. Colapsa a una
+  columna con `@media (max-width: 900px)` (hero deja de ser sticky).
+- Paneles de contenido reescritos para usar el ancho ganado en vez de apilar en una
+  columna estrecha: `.cardList` (Habilidades/Movimientos/Formas) pasa de flex-column a
+  `grid-template-columns: repeat(auto-fill, minmax(260px, 1fr))`; `.infoList` (pestaña
+  Info) a `repeat(auto-fit, minmax(280px, 1fr))` (2 columnas en desktop); `.evoList`
+  pasa de tarjetas apiladas verticalmente a flujo horizontal con conector de línea
+  discontinua entre ellas (antes vertical). `.quote` (Descripción) con
+  `max-width: 60ch` para no perder legibilidad en líneas demasiado largas. Cards con
+  sombra suave (`box-shadow`) añadida, coherente con el look de las capturas.
+- El marco HUD de esquinas (firma visual, ver rediseño anterior) se mantuvo alrededor
+  del sprite de cabecera — no entra en conflicto con el redondeado, es análogo a las
+  marcas de visor de una cámara sobre una foto con esquinas redondeadas.
+
+**No tocado:** nav, `/`, `/cache`, `/pokemon` — David solo señaló la ficha y el fondo
+global; el resto del sistema de tokens/paleta sigue igual. Si en algún momento pide
+"que todo se parezca más a las capturas" habría que revisar si quiere también el
+cream/beige de fondo de Dexter en vez del chasis oscuro — de momento no lo ha pedido.
+
+**Verificado:** compila sin errores (`docker compose logs frontend`, y se pidió
+directamente el módulo transformado de `PokemonFichaPage.jsx` a Vite para confirmar
+que no quedaba ningún `PARSE_ERROR` residual de un estado intermedio del edit). **No
+verificado a ojo en navegador** — mismo hueco de `claude-in-chrome` de toda la vida de
+este proyecto.
+
+## Cacheo por lotes concurrente — HECHO 2026-08-16
+
+David preguntó si el cacheo lento era limitación real de PokeAPI o mejorable. No era
+la PokeAPI: era que `cacheAllPending` (compartida por el botón por-recurso y el botón
+maestro de `/cache`) hacía **un POST por item, en serie**, esperando la respuesta
+completa (ida y vuelta navegador↔backend↔PokeAPI↔BD con `flush()` individual) antes de
+lanzar el siguiente. David pidió arreglarlo pero dejó claro: **sigue siendo 100%
+manual** — nada de cacheo en segundo plano ni disparado automáticamente, solo que el
+botón que ya existía vaya más rápido.
+
+- `PokeApiClient::fetchManyResources(resourceType, ids[])` — dispara todas las
+  peticiones a PokeAPI con `request()` (no bloquea hasta `toArray()`) antes de leer
+  ninguna respuesta, así que el `HttpClient` de Symfony las corre en paralelo por
+  debajo (multiplexado por curl). `config/packages/framework.yaml` sube
+  `max_host_connections` de 6 (default) a 30 para que ese paralelismo sea real.
+- `PokeApiCacheService::cacheBatch(resourceType, ids[])` — pide ese lote entero de
+  golpe y hace **un único `flush()`** al final (antes: un flush por item). Ids ya
+  cacheados se descartan con `PokeApiResourceCacheRepository::findExistingIds()`
+  (defensivo, por si la lista que tenía el frontend estaba desactualizada).
+- Endpoint nuevo `POST /api/pokeapi/{resourceType}/cache-batch` (body
+  `{"ids": [...]}`, máx. 100 por seguridad) — `PokeApiCacheBatchController`. El
+  endpoint de un solo id (`POST .../cache/{idOrName}`) se deja igual, lo sigue usando
+  el botón "cachear lo que falta" de una ficha individual (no se tocó, no hacía falta).
+- Frontend: `cacheAllPending` (`utils/cachePokeApiResource.js`) trocea lo pendiente en
+  lotes de 40 (`BATCH_SIZE`) y llama a `/cache-batch` en vez de un POST por id;
+  `useCacheAllResource` ahora suma `done` por lote en vez de por item. Mismos botones
+  de siempre, mismo disparo manual — solo cambió cómo cachea por dentro.
+
+**Medido en real** (`location-area`, todos sus 1533 ids estaban pendientes): 40 ids en
+lote → 1.52s; el endpoint antiguo de un id → ~0.6-0.8s cada uno. **~17-20x más
+rápido.** Se probó a fondo cacheando `evolution-chain` completo (291 ids pendientes,
+8s en total) — de paso esto deja resuelta la limitación pendiente del filtro de
+"etapas evolutivas" de `/pokemon` (antes solo 3/541 cadenas cacheadas y la mayoría de
+Pokémon con `evolutionStages: null`; ahora 541/541 cadenas cacheadas y **1025/1025
+Pokémon con `evolutionStages` calculado**, verificado por curl).
+
+**Verificado:** backend probado por curl end-to-end (lote real de 40 `location-area` +
+291 `evolution-chain`, conteos de cacheados coinciden exactamente con lo esperado),
+frontend compila sin errores. **No verificado a ojo en navegador** (mismo hueco de
+`claude-in-chrome` de siempre) — el flujo real del botón "Cachear todo" en `/cache`
+no se ha pulsado a través de la UI en esta sesión, solo su lógica equivalente por curl.
+
 ## Pendiente / siguiente paso natural
 
 - No hay vistas de listado/detalle navegable para ningún recurso salvo Pokémon — el resto

@@ -1,5 +1,8 @@
 import usePokemonList from '../../hooks/usePokemonList.js'
+import usePokemonBrowser from '../../hooks/usePokemonBrowser.js'
 import PokemonCard from '../../components/PokemonCard/PokemonCard.jsx'
+import PokemonFilters from '../../components/PokemonFilters/PokemonFilters.jsx'
+import GenerationPager from '../../components/GenerationPager/GenerationPager.jsx'
 import styles from './PokemonListPage.module.css'
 
 const officialArtworkUrl = (id) =>
@@ -7,11 +10,16 @@ const officialArtworkUrl = (id) =>
 
 export default function PokemonListPage() {
   const { status, pokemon, error, reload } = usePokemonList()
+  const { filters, setFilter, resetFilters, filtering, generations, activeGeneration, setActiveGeneration, visible } =
+    usePokemonBrowser(pokemon)
 
   return (
     <section className={styles.page}>
       <div className={styles.header}>
-        <h1 className={styles.title}>Pokémon</h1>
+        <div>
+          <span className="eyebrow">Pokédex nacional</span>
+          <h1 className={styles.title}>Pokémon</h1>
+        </div>
         <button type="button" className={styles.reload} onClick={reload} disabled={status === 'loading'}>
           {status === 'loading' ? 'Cargando…' : 'Recargar'}
         </button>
@@ -24,13 +32,35 @@ export default function PokemonListPage() {
       )}
 
       {pokemon.length > 0 && (
-        <ul className={styles.grid}>
-          {pokemon.map((entry) => (
-            <li key={entry.id}>
-              <PokemonCard id={entry.id} name={entry.name} sprite={officialArtworkUrl(entry.id)} types={entry.types} />
-            </li>
-          ))}
-        </ul>
+        <>
+          <PokemonFilters
+            filters={filters}
+            onSetFilter={setFilter}
+            onReset={resetFilters}
+            filtering={filtering}
+            resultCount={visible.length}
+          />
+
+          {!filtering && (
+            <GenerationPager
+              generations={generations}
+              activeGeneration={activeGeneration}
+              onSelect={setActiveGeneration}
+            />
+          )}
+
+          {visible.length === 0 ? (
+            <p className={styles.empty}>Ningún Pokémon coincide con estos filtros.</p>
+          ) : (
+            <ul className={styles.grid}>
+              {visible.map((entry) => (
+                <li key={entry.id}>
+                  <PokemonCard id={entry.id} name={entry.name} sprite={officialArtworkUrl(entry.id)} types={entry.types} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </section>
   )

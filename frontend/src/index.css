@@ -1,9 +1,21 @@
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
+  --font-display: 'Chakra Petch', system-ui, sans-serif;
+  --font-body: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
 
-  font: 18px/145% system-ui, 'Segoe UI', Roboto, sans-serif;
+  --chassis-950: #eef1f5;
+  --chassis-900: #ffffff;
+  --chassis-800: #e4e8ee;
+  --line: #cbd2dc;
+  --text: #4a5261;
+  --text-h: #12161f;
+  --signal: #b8630a;
+  --signal-contrast: #ffffff;
+  --ok: #1a9e63;
+  --error: #d43f3f;
+  --bg: var(--chassis-950);
+
+  font: 16px/1.5 var(--font-body);
   color-scheme: light dark;
   color: var(--text);
   background: var(--bg);
@@ -15,9 +27,17 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
+    --chassis-950: #14171d;
+    --chassis-900: #1b1f27;
+    --chassis-800: #242a35;
+    --line: #333c4a;
+    --text: #9aa3b2;
+    --text-h: #eef1f6;
+    --signal: #ffb238;
+    --signal-contrast: #14171d;
+    --ok: #3ddc91;
+    --error: #ff6b6b;
+    --bg: var(--chassis-950);
   }
 }
 
@@ -27,8 +47,101 @@
 
 body {
   margin: 0;
+  position: relative;
 }
 
-h1 {
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 70% 50% at 50% -10%, color-mix(in srgb, var(--signal) 7%, transparent), transparent);
+  z-index: -1;
+}
+
+h1,
+h2,
+h3 {
   color: var(--text-h);
+  font-family: var(--font-display);
+  margin: 0;
+}
+
+button {
+  font-family: var(--font-body);
+}
+
+::selection {
+  background: var(--signal);
+  color: var(--signal-contrast);
+}
+
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Utilidades globales compartidas entre módulos CSS (no aptas para :local por
+   necesitar currentColor tintado desde JSX inline, ver PokemonCard/PokemonFichaPage). */
+
+.eyebrow {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.72rem;
+  color: var(--text);
+  opacity: 0.75;
+}
+
+/* Marco de esquinas tipo visor/HUD — la firma visual del diseño. Ocho gradientes
+   dibujan los 4 trazos-en-L sin marcado extra; el color se tiñe con currentColor desde
+   el contenedor (normalmente el color de tipo del Pokémon activo). */
+.hud-frame {
+  position: relative;
+}
+
+.hud-frame::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-image:
+    linear-gradient(to right, currentColor 2px, transparent 2px),
+    linear-gradient(to right, currentColor 2px, transparent 2px),
+    linear-gradient(to left, currentColor 2px, transparent 2px),
+    linear-gradient(to left, currentColor 2px, transparent 2px),
+    linear-gradient(to bottom, currentColor 2px, transparent 2px),
+    linear-gradient(to bottom, currentColor 2px, transparent 2px),
+    linear-gradient(to top, currentColor 2px, transparent 2px),
+    linear-gradient(to top, currentColor 2px, transparent 2px);
+  background-position:
+    top left, bottom left,
+    top right, bottom right,
+    top left, top right,
+    bottom left, bottom right;
+  background-size: 16px 2px, 16px 2px, 16px 2px, 16px 2px, 2px 16px, 2px 16px, 2px 16px, 2px 16px;
+  opacity: 0.85;
+}
+
+.hud-frame--hover::before {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hud-frame--animated::before {
+    animation: hud-pulse 3s ease-in-out infinite;
+  }
+}
+
+@keyframes hud-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
 }

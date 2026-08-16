@@ -1,0 +1,47 @@
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.tab {
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  background: var(--chassis-900);
+  color: var(--text);
+  padding: 0.45rem 0.7rem;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.tab:hover {
+  border-color: var(--signal);
+  color: var(--text-h);
+}
+
+.tabActive {
+  border-color: var(--signal);
+  background: color-mix(in srgb, var(--signal) 14%, var(--chassis-900));
+  color: var(--text-h);
+}
+
+.roman {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.region {
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  opacity: 0.85;
+}
+
+.count {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  opacity: 0.6;
+}

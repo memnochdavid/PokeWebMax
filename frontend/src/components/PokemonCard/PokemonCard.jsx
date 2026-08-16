@@ -17,17 +17,21 @@ export default function PokemonCard({ id, name, sprite, types = [] }) {
 
   return (
     <Link to={`/ficha/${id}`} className={styles.card} style={background}>
-      <img
-        className={styles.sprite}
-        src={image.src}
-        onError={image.onError}
-        alt={name}
-        width={96}
-        height={96}
-      />
+      <span className={styles.number}>{formatPokedexNumber(id)}</span>
+      <div className={`${styles.spriteWrap} hud-frame hud-frame--hover`} style={{ color: color1 }}>
+        <img
+          className={styles.sprite}
+          src={image.src}
+          onError={image.onError}
+          alt={name}
+          width={96}
+          height={96}
+          loading="lazy"
+          decoding="async"
+        />
+      </div>
       <div className={styles.info}>
         <strong className={styles.name}>{capitalize(name)}</strong>
-        <span className={styles.number}>{formatPokedexNumber(id)}</span>
         {types.length > 0 && (
           <div className={styles.types}>
             {types.map((type) => (

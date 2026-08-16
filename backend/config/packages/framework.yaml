@@ -8,6 +8,14 @@ framework:
     #esi: true
     #fragments: true
 
+    # Concurrencia hacia PokeAPI para el cacheo por lotes (ver
+    # PokeApiClient::fetchManyResources) — sin esto el valor por defecto de Symfony
+    # (6 conexiones por host) limitaría el paralelismo real de cada lote.
+    http_client:
+        max_host_connections: 30
+        default_options:
+            timeout: 20
+
 when@test:
     framework:
         test: true

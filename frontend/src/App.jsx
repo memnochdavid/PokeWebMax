@@ -11,15 +11,21 @@ function App() {
   return (
     <div className={styles.app}>
       <nav className={styles.nav}>
-        <NavLink to="/" end className={navLinkClassName}>
-          Estado
-        </NavLink>
-        <NavLink to="/cache" className={navLinkClassName}>
-          Cachear
-        </NavLink>
-        <NavLink to="/pokemon" className={navLinkClassName}>
-          Pokémon
-        </NavLink>
+        <div className={styles.brand}>
+          <span className={styles.brandDot} />
+          PokeWebMax
+        </div>
+        <div className={styles.links}>
+          <NavLink to="/" end className={navLinkClassName}>
+            Estado
+          </NavLink>
+          <NavLink to="/cache" className={navLinkClassName}>
+            Cachear
+          </NavLink>
+          <NavLink to="/pokemon" className={navLinkClassName}>
+            Pokémon
+          </NavLink>
+        </div>
       </nav>
 
       <main className={styles.main}>

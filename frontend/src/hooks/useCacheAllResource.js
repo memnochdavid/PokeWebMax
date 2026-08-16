@@ -16,7 +16,7 @@ export default function useCacheAllResource(resourceType) {
     try {
       await cacheAllPending(resourceType, {
         onTotal: setTotal,
-        onProgress: () => setDone((prev) => prev + 1),
+        onProgress: (count) => setDone((prev) => prev + count),
       })
     } catch (err) {
       setError(err.response?.data?.error ?? 'Error inesperado.')
