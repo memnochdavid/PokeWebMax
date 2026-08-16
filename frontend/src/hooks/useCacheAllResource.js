@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { cacheAllPending } from '../utils/cachePokeApiResource.js'
+import i18n from '../i18n.js'
 
 export default function useCacheAllResource(resourceType) {
   const [status, setStatus] = useState('idle') // idle | running | done | error
@@ -19,7 +20,7 @@ export default function useCacheAllResource(resourceType) {
         onProgress: (count) => setDone((prev) => prev + count),
       })
     } catch (err) {
-      setError(err.response?.data?.error ?? 'Error inesperado.')
+      setError(err.response?.data?.error ?? i18n.t('errors.unexpected'))
       setStatus('error')
       return
     }

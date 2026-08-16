@@ -1,10 +1,14 @@
 import { createContext, useCallback, useContext, useState } from 'react'
+import i18next from '../i18n.js'
 
-// Idiomas del selector — no de la interfaz (que se queda en español, como el resto de
-// la app), solo de los DATOS de PokeAPI (nombres, descripciones...). Añadir uno nuevo
-// aquí es en principio suficiente en el frontend; en el backend hay que sincronizar
-// PokemonListService::SUPPORTED_LANGUAGES si ese idioma debe llegar también a
-// /api/pokemon/names (lista + nombres de la cadena evolutiva en la ficha).
+// Un único selector para el idioma de los DATOS de PokeAPI (nombres, descripciones...)
+// Y de la interfaz (nav, botones, mensajes — vía react-i18next, ver i18n.js).
+// LanguageContext es la fuente de verdad (persiste en localStorage); i18next solo
+// refleja el mismo valor. Añadir un idioma nuevo aquí requiere también: (a) un bloque
+// de traducción en locales/es.json y locales/en.json (o el nuevo idioma) para la
+// interfaz, y (b) sincronizar PokemonListService::SUPPORTED_LANGUAGES en el backend si
+// ese idioma debe llegar también a /api/pokemon/names (lista + nombres de la cadena
+// evolutiva en la ficha).
 export const LANGUAGES = [
   { code: 'es', label: 'ES' },
   { code: 'en', label: 'EN' },
@@ -27,8 +31,16 @@ function readStoredLanguage() {
 export function LanguageProvider({ children }) {
   const [language, setLanguageState] = useState(readStoredLanguage)
 
+  // Sincroniza i18next ANTES de que se monten los hijos (durante el render, no en un
+  // efecto) para que no haya un parpadeo en español al cargar con 'en' persistido.
+  // changeLanguage() es idempotente, así que el doble render de StrictMode no molesta.
+  if (i18next.language !== language) {
+    i18next.changeLanguage(language)
+  }
+
   const setLanguage = useCallback((code) => {
     setLanguageState(code)
+    i18next.changeLanguage(code)
     try {
       localStorage.setItem(STORAGE_KEY, code)
     } catch {

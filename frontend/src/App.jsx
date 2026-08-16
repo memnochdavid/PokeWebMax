@@ -1,4 +1,5 @@
 import { NavLink, Route, Routes } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import StatusPage from './pages/StatusPage/StatusPage.jsx'
 import CacheAllPage from './pages/CacheAllPage/CacheAllPage.jsx'
 import PokemonListPage from './pages/PokemonListPage/PokemonListPage.jsx'
@@ -10,26 +11,27 @@ const navLinkClassName = ({ isActive }) => (isActive ? styles.navActive : undefi
 
 function App() {
   const { language, setLanguage } = useLanguage()
+  const { t } = useTranslation()
 
   return (
     <div className={styles.app}>
       <nav className={styles.nav}>
         <div className={styles.brand}>
           <span className={styles.brandDot} />
-          PokeWebMax
+          {t('nav.brand')}
         </div>
         <div className={styles.links}>
           <NavLink to="/" end className={navLinkClassName}>
-            Estado
+            {t('nav.status')}
           </NavLink>
           <NavLink to="/cache" className={navLinkClassName}>
-            Cachear
+            {t('nav.cache')}
           </NavLink>
           <NavLink to="/pokemon" className={navLinkClassName}>
-            Pokémon
+            {t('nav.pokemon')}
           </NavLink>
         </div>
-        <div className={styles.langSwitch} role="group" aria-label="Idioma de los datos">
+        <div className={styles.langSwitch} role="group" aria-label={t('nav.dataLanguageAria')}>
           {LANGUAGES.map(({ code, label }) => (
             <button
               key={code}

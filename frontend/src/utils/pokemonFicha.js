@@ -5,14 +5,16 @@ import { localizedEntry } from './pokeApiLocalization.js'
 // referencia (ver captura de Dexter, 2026-08-16): necesitan cruzar con recursos que el
 // ensamblador todavía no resuelve (`type`, encounters) o carecen de asset propio
 // (carátulas de juego) — no se inventan aquí.
+// Catálogo interno indexado por `key`, no prosa de interfaz — etiquetas bilingües
+// inline en vez de locales/*.json, mismo criterio que damageClassName.
 export const FICHA_SECTIONS = [
-  { key: 'DESC', label: 'Descripción', missingKey: 'species' },
-  { key: 'EVOS', label: 'Evolución', missingKey: 'evolutionChain' },
-  { key: 'STATS', label: 'Stats', missingKey: null },
-  { key: 'ABILITY', label: 'Habilidades', missingKey: 'abilities' },
-  { key: 'MOVES', label: 'Movimientos', missingKey: 'moves' },
-  { key: 'INFO', label: 'Info', missingKey: 'species' },
-  { key: 'FORM', label: 'Formas', missingKey: 'forms' },
+  { key: 'DESC', label: { es: 'Descripción', en: 'Description' }, missingKey: 'species' },
+  { key: 'EVOS', label: { es: 'Evolución', en: 'Evolution' }, missingKey: 'evolutionChain' },
+  { key: 'STATS', label: { es: 'Stats', en: 'Stats' }, missingKey: null },
+  { key: 'ABILITY', label: { es: 'Habilidades', en: 'Abilities' }, missingKey: 'abilities' },
+  { key: 'MOVES', label: { es: 'Movimientos', en: 'Moves' }, missingKey: 'moves' },
+  { key: 'INFO', label: { es: 'Info', en: 'Info' }, missingKey: 'species' },
+  { key: 'FORM', label: { es: 'Formas', en: 'Forms' }, missingKey: 'forms' },
 ]
 
 export function sectionMissingCount(missing, missingKey) {
@@ -80,6 +82,32 @@ export function flavorTextsByVersion(species, language, wikidexFlavorText = {}) 
   return Array.from(seen, ([text, { version, translated }]) => ({ version, text, translated }))
 }
 
+// Descripción de una habilidad o movimiento a partir de su `flavor_text_entries`
+// (mismo formato que species, pero SIN el nivel de detalle "por versión" — aquí solo
+// hace falta un texto representativo). Se usa flavor_text_entries y no
+// effect_entries porque effect_entries no tiene NINGUNA entrada en español en toda la
+// caché de este proyecto (0/373 abilities, 0/937 moves — limitación real de PokeAPI,
+// verificado con SQL directo), mientras que flavor_text_entries sí trae español para
+// la mayoría (267/373 abilities, 826/937 moves) con el mismo texto corto.
+// Se queda con la ÚLTIMA entrada que matchea en vez de la primera: el array viene en
+// orden cronológico ascendente por version_group y el texto cambia de redacción entre
+// generaciones — la última es la más moderna.
+export function latestVersionedText(entries, language, textKey = 'flavor_text') {
+  if (!Array.isArray(entries) || entries.length === 0) return { text: null, translated: false }
+
+  let matched
+  let fallbackEn
+  for (const entry of entries) {
+    const lang = entry.language.name
+    if (lang === language) matched = entry[textKey]
+    else if (lang === 'en') fallbackEn = entry[textKey]
+  }
+
+  const translated = matched !== undefined
+  const raw = translated ? matched : fallbackEn
+  return { text: raw?.replace(/[\n\f]/g, ' ') ?? null, translated }
+}
+
 // physical/special/status: solo 3 valores fijos de PokeAPI, seguro hardcodear en vez
 // de depender de cachear el recurso move-damage-class solo para esto.
 const DAMAGE_CLASS_ES = { physical: 'Físico', special: 'Especial', status: 'Estado' }
@@ -101,26 +129,29 @@ function idFromUrl(url) {
   return Number(segments[segments.length - 1])
 }
 
-function evolutionMethodLabel(details) {
+// `t` es el i18next `t()` de react-i18next (ver PokemonFichaPage.jsx) — prosa de
+// interfaz con interpolación (nivel, ítem...), no un catálogo estático, así que va por
+// locales/*.json y no inline como FICHA_SECTIONS/DAMAGE_CLASS_ES.
+function evolutionMethodLabel(details, t) {
   const d = details?.[0]
   if (!d) return null
-  if (d.min_level) return `Nivel ${d.min_level}`
-  if (d.item) return `Usar ${d.item.name.replace(/-/g, ' ')}`
-  if (d.min_happiness) return `Felicidad ${d.min_happiness}+`
-  if (d.trigger?.name === 'trade') return 'Intercambio'
-  return 'Evoluciona'
+  if (d.min_level) return t('ficha.evoMethod.level', { level: d.min_level })
+  if (d.item) return t('ficha.evoMethod.useItem', { item: d.item.name.replace(/-/g, ' ') })
+  if (d.min_happiness) return t('ficha.evoMethod.happiness', { value: d.min_happiness })
+  if (d.trigger?.name === 'trade') return t('ficha.evoMethod.trade')
+  return t('ficha.evoMethod.default')
 }
 
 // Aplana la cadena evolutiva (estructura recursiva chain.evolves_to[]) a una lista
 // ordenada de etapas con el método de la transición ANTERIOR a cada una — ignora ramas
 // alternativas (ej. Eevee), suficiente para una vista lineal simple.
-export function evolutionStages(evolutionChain) {
+export function evolutionStages(evolutionChain, t) {
   const stages = []
   let node = evolutionChain?.chain
   let method = null
   while (node) {
     stages.push({ id: idFromUrl(node.species.url), name: node.species.name, method })
-    method = evolutionMethodLabel(node.evolves_to?.[0]?.evolution_details)
+    method = evolutionMethodLabel(node.evolves_to?.[0]?.evolution_details, t)
     node = node.evolves_to?.[0]
   }
   return stages

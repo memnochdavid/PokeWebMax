@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import axios from 'axios'
+import i18n from '../i18n.js'
 
 export default function usePokemonFicha(idOrName) {
   const [status, setStatus] = useState('loading') // loading | success | error
@@ -18,7 +19,7 @@ export default function usePokemonFicha(idOrName) {
         setStatus('success')
       })
       .catch((err) => {
-        setError(err.response?.data?.error ?? 'Error inesperado.')
+        setError(err.response?.data?.error ?? i18n.t('errors.unexpected'))
         setStatus('error')
       })
   }, [idOrName])
@@ -33,7 +34,7 @@ export default function usePokemonFicha(idOrName) {
       const { data } = await axios.post(`/api/pokemon/${idOrName}/ficha/cache-missing`)
       setFicha(data)
     } catch (err) {
-      setError(err.response?.data?.error ?? 'Error inesperado.')
+      setError(err.response?.data?.error ?? i18n.t('errors.unexpected'))
     } finally {
       setCaching(false)
     }

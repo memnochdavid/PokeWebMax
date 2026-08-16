@@ -1,0 +1,104 @@
+{
+  "nav": {
+    "brand": "PokeWebMax",
+    "status": "Status",
+    "cache": "Cache",
+    "pokemon": "Pokémon",
+    "dataLanguageAria": "Data language"
+  },
+  "status": {
+    "eyebrow": "System diagnostics",
+    "title": "PokeWebMax",
+    "retry": "Check again",
+    "frontend": "Frontend",
+    "backendApi": "Backend API",
+    "database": "Database",
+    "pending": "checking…",
+    "frontendOk": "running",
+    "backendOk": "connected",
+    "backendError": "disconnected",
+    "databaseOk": "connected",
+    "databaseError": "disconnected",
+    "databaseUnknown": "unknown"
+  },
+  "cache": {
+    "eyebrow": "Data acquisition",
+    "title": "Cache PokeAPI",
+    "allLabel": "Everything (49 resources)",
+    "cacheButton": "Cache all",
+    "cachingButton": "Caching…",
+    "cacheAllButton": "Cache everything missing",
+    "cachingAllButton": "Caching everything…",
+    "resourceDone": "Done: {{count}} processed.",
+    "allDone": "Done: all {{count}} resources are up to date.",
+    "allProgress": "{{done}} / {{total}} resources ({{currentType}})",
+    "errorCaching": "Error caching \"{{resourceType}}\"."
+  },
+  "list": {
+    "eyebrow": "National Pokédex",
+    "title": "Pokémon",
+    "loading": "Loading…",
+    "reload": "Reload",
+    "empty": "No Pokémon cached yet.",
+    "emptyFiltered": "No Pokémon match these filters."
+  },
+  "filters": {
+    "searchPlaceholder": "Search by name…",
+    "type1": "Type 1",
+    "type2": "Type 2",
+    "toggleLegendary": "Legendary",
+    "toggleMythical": "Mythical",
+    "toggleMega": "Mega",
+    "toggleGmax": "Gigantamax",
+    "toggleRegional": "Regional",
+    "stages": "Stages",
+    "clear": "Clear",
+    "results_one": "{{count}} result",
+    "results_other": "{{count}} results"
+  },
+  "generationPager": {
+    "ariaLabel": "Generation"
+  },
+  "ficha": {
+    "loading": "Loading…",
+    "cacheBarMissing": "{{count}} resources still need caching to complete this entry.",
+    "cacheButton": "Cache everything missing",
+    "cachingButton": "Caching…",
+    "descriptionUnavailable": "Description unavailable — cache pokemon-species.",
+    "notTranslated": "No PokeAPI translation for this language in this game — showing English.",
+    "evoChainMissing": "Evolution chain not cached yet.",
+    "evoMethod": {
+      "level": "Level {{level}}",
+      "useItem": "Use {{item}}",
+      "happiness": "Happiness {{value}}+",
+      "trade": "Trade",
+      "default": "Evolves"
+    },
+    "height": "Height",
+    "weight": "Weight",
+    "statsTotal": "Total",
+    "hiddenAbility": "Hidden",
+    "noDescription": "No description available.",
+    "notCachedAbility": "Not cached yet.",
+    "notCachedMove": "Not cached yet.",
+    "notCachedForm": "not cached",
+    "cacheToViewInfo": "Cache pokemon-species to see this section.",
+    "movePower": "Pow.",
+    "movePP": "PP",
+    "moveAccuracy": "Acc.",
+    "info": {
+      "baseExp": "Base Exp.",
+      "gender": "Gender",
+      "noGender": "Genderless",
+      "capture": "Capture Rate",
+      "baseHappiness": "Base Happiness",
+      "eggGroup": "Egg Group",
+      "hatchSteps": "Hatch Steps",
+      "growthRate": "Growth Rate",
+      "habitat": "Habitat"
+    }
+  },
+  "errors": {
+    "unexpected": "Unexpected error."
+  }
+}

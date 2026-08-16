@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Última actualización: 2026-08-16.
+Última actualización: 2026-08-17.
 
 ## Hecho
 
@@ -553,13 +553,15 @@ frontend compila sin errores. **No verificado a ojo en navegador** (mismo hueco 
 `claude-in-chrome` de siempre) — el flujo real del botón "Cachear todo" en `/cache`
 no se ha pulsado a través de la UI en esta sesión, solo su lógica equivalente por curl.
 
-## Selector de idioma de los datos (ES/EN) — HECHO 2026-08-16
+## Selector de idioma de los datos (ES/EN) — HECHO 2026-08-16, ampliado a la interfaz 2026-08-17
 
 David notó que muchas cosas aparecían en inglés (nombres de movimientos, habilidades,
 formas, algunos Pokémon) y pidió poder cambiar el idioma. **Alcance deliberadamente
-acotado**: solo el idioma de los DATOS de PokeAPI, no de la interfaz — nav, botones,
-mensajes de error siguen en español fijo, como el resto de la app. Empezado con
-ES/EN (fácil añadir más, ver abajo).
+acotado en su momento**: solo el idioma de los DATOS de PokeAPI, no de la interfaz.
+**Superado 2026-08-17**: David pidió explícitamente que la interfaz también cambie de
+idioma — ver sección "i18n de la interfaz" más abajo. `LanguageContext` sigue siendo
+la única fuente de verdad del idioma (persistido en localStorage); ahora también
+gobierna react-i18next, no solo la localización de datos de PokeAPI.
 
 **Punto clave que simplificó todo:** los payloads ya cacheados traen el nombre en
 *todos* los idiomas dentro de `names[]`/`genera[]`/`flavor_text_entries[]` (así
@@ -698,6 +700,63 @@ fallback — limitación del modelo de datos (PokeAPI no tiene flavor text por f
 un bug. Y la pestaña Ubicaciones con `{{Localización}}`: el parser ya lo soporta
 (`parse_localizacion()`), pero falta todo el cableado de exportación/entidad/import/
 frontend — mismo patrón que este documento, sin empezar.
+
+## Descripciones de habilidades/movimientos en español + i18n de la interfaz — HECHO 2026-08-17
+
+Tres pedidos en la misma sesión, todos ejecutados:
+
+**1. Descripción de habilidades en español.** Diagnosticado con SQL directo contra la
+caché real: `effect_entries` (lo que se usaba) no tiene NINGUNA entrada en español en
+toda la caché — 0/373 abilities, 0/937 moves, limitación real de PokeAPI, no bug
+nuestro. Pero SÍ existe `flavor_text_entries` (mismo texto corto, por versión de
+juego) con cobertura real: 267/373 abilities, 826/937 moves en español. Cambiado el
+origen del texto a `flavor_text_entries`, sin tocar el backend (el payload completo ya
+estaba cacheado, incluye ese campo). Nueva función `latestVersionedText(entries,
+language, textKey)` en `utils/pokemonFicha.js` — coge la ÚLTIMA entrada que matchea
+(no la primera como `localizedEntry`) porque el array es cronológico y el texto cambia
+de redacción entre generaciones. Devuelve `{text, translated}`, mismo patrón de tag
+"EN" que ya usaba el selector de descripción de especie.
+
+**2. Movimientos desplegables con descripción.** Las cards de `MOVES` en
+`PokemonFichaPage.jsx` ahora son clicables (`role="button"`, con soporte de teclado
+Enter/Espacio) — al hacer click alternan un estado `expandedMoves` (Set de ids) que
+muestra `latestVersionedText(move.flavor_text_entries, language)` bajo las stats.
+100% frontend, el payload del movimiento ya venía completo desde el backend.
+
+**3. i18n completo de la interfaz.** David pidió expandir el selector ES/EN — antes
+solo tocaba datos de PokeAPI, la interfaz se quedaba fija en español (ver nota de
+arriba). **Decisión de librería consultada a David explícitamente** (no decidida por
+Claude): eligió `react-i18next` sobre un diccionario propio, a pesar de que el caso de
+uso (2 idiomas fijos, ~80 strings) hubiera bastado con algo más ligero — es su
+preferencia explícita para dejarlo mejor preparado a futuro (más idiomas, plurales).
+  - `frontend/src/i18n.js` + `locales/{es,en}.json` (82 claves, mismas en ambos
+    idiomas, verificado). `LanguageContext` sigue siendo la fuente de verdad del
+    idioma — llama a `i18next.changeLanguage()` al cambiar y también durante el
+    render inicial (no en un efecto) para no parpadear en español si hay 'en'
+    persistido en localStorage.
+  - **Criterio de qué va por i18next y qué no** (documentado en `i18n.js`): prosa de
+    interfaz con interpolación (botones, mensajes, plurales) va en
+    `locales/*.json` vía `useTranslation()`. Catálogos internos indexados por clave
+    (pestañas de la ficha en `FICHA_SECTIONS`, las 49 etiquetas de recursos de
+    PokeAPI en `pokeApiResources.js`, nombres de región en `generations.js`) se
+    quedan como objetos bilingües inline `{es, en}` — mismo patrón que ya usaba
+    `DAMAGE_CLASS_ES` antes de esta sesión. Mezclar los dos mecanismos fue deliberado,
+    no inconsistencia: son tipos de contenido genuinamente distintos.
+  - Los mensajes de error que vienen del backend (`err.response?.data?.error`) NO se
+    traducen — el backend no tiene i18n y traducirlo no se pidió; el fallback local
+    ('Error inesperado.' → `errors.unexpected`) sí usa el `i18n.t()` global (fuera de
+    componente, hooks como `usePokemonFicha`/`usePokemonList` lo importan
+    directamente de `i18n.js`, no de `useTranslation()`).
+  - `useServiceHealth.js` refactorizado para devolver solo estados (`ok`/`error`/
+    `pending`/`unknown`), no texto ya traducido — si no, cambiar de idioma a media
+    sesión dejaría frases viejas en pantalla hasta el siguiente fetch.
+  - **Verificado con datos reales**: `npm run build` (vía `node
+    node_modules/vite/bin/vite.js build` — el mismo problema de fuseblk/sin bit +x de
+    siempre) compiló limpio, 167 módulos. Interpolación y pluralización de i18next
+    probadas con `i18next.t()` real (no reimplementado) para ambos idiomas.
+    **No verificado a ojo en navegador** (sin `claude-in-chrome` disponible esta
+    sesión) — clicar el selector ES/EN y comprobar que todo el nav/botones/mensajes
+    cambian de verdad sigue pendiente de que David lo mire una vez.
 
 ## Pendiente / siguiente paso natural
 

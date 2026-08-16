@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import axios from 'axios'
+import i18n from '../i18n.js'
 
 export default function usePokemonList() {
   const [status, setStatus] = useState('loading') // loading | success | error
@@ -17,7 +18,7 @@ export default function usePokemonList() {
         setStatus('success')
       })
       .catch((err) => {
-        setError(err.response?.data?.error ?? 'Error inesperado.')
+        setError(err.response?.data?.error ?? i18n.t('errors.unexpected'))
         setStatus('error')
       })
   }, [])

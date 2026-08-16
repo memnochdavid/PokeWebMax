@@ -1,17 +1,19 @@
+import { useTranslation } from 'react-i18next'
 import { useLanguage } from '../../contexts/LanguageContext.jsx'
 import { ALL_TYPES, typeName } from '../../utils/pokemonTypes.js'
 import styles from './PokemonFilters.module.css'
 
 const TOGGLES = [
-  { key: 'legendary', label: 'Legendario' },
-  { key: 'mythical', label: 'Singular' },
-  { key: 'mega', label: 'Mega' },
-  { key: 'gmax', label: 'Gigamax' },
-  { key: 'regional', label: 'Regional' },
+  { key: 'legendary', labelKey: 'filters.toggleLegendary' },
+  { key: 'mythical', labelKey: 'filters.toggleMythical' },
+  { key: 'mega', labelKey: 'filters.toggleMega' },
+  { key: 'gmax', labelKey: 'filters.toggleGmax' },
+  { key: 'regional', labelKey: 'filters.toggleRegional' },
 ]
 
 export default function PokemonFilters({ filters, onSetFilter, onReset, filtering, resultCount }) {
   const { language } = useLanguage()
+  const { t } = useTranslation()
 
   return (
     <div className={styles.panel}>
@@ -19,7 +21,7 @@ export default function PokemonFilters({ filters, onSetFilter, onReset, filterin
         <input
           type="search"
           className={styles.search}
-          placeholder="Buscar por nombre…"
+          placeholder={t('filters.searchPlaceholder')}
           value={filters.query}
           onChange={(e) => onSetFilter('query', e.target.value)}
         />
@@ -28,7 +30,7 @@ export default function PokemonFilters({ filters, onSetFilter, onReset, filterin
           value={filters.type1}
           onChange={(e) => onSetFilter('type1', e.target.value)}
         >
-          <option value="">Tipo 1</option>
+          <option value="">{t('filters.type1')}</option>
           {ALL_TYPES.map((type) => (
             <option key={type} value={type}>
               {typeName(type, language)}
@@ -40,7 +42,7 @@ export default function PokemonFilters({ filters, onSetFilter, onReset, filterin
           value={filters.type2}
           onChange={(e) => onSetFilter('type2', e.target.value)}
         >
-          <option value="">Tipo 2</option>
+          <option value="">{t('filters.type2')}</option>
           {ALL_TYPES.map((type) => (
             <option key={type} value={type}>
               {typeName(type, language)}
@@ -50,19 +52,19 @@ export default function PokemonFilters({ filters, onSetFilter, onReset, filterin
       </div>
 
       <div className={styles.toggleRow}>
-        {TOGGLES.map(({ key, label }) => (
+        {TOGGLES.map(({ key, labelKey }) => (
           <button
             key={key}
             type="button"
             className={`${styles.toggle} ${filters[key] ? styles.toggleActive : ''}`}
             onClick={() => onSetFilter(key, !filters[key])}
           >
-            {label}
+            {t(labelKey)}
           </button>
         ))}
 
         <div className={styles.evoGroup}>
-          <span className={styles.evoLabel}>Etapas</span>
+          <span className={styles.evoLabel}>{t('filters.stages')}</span>
           {[1, 2, 3].map((n) => (
             <button
               key={n}
@@ -77,16 +79,12 @@ export default function PokemonFilters({ filters, onSetFilter, onReset, filterin
 
         {filtering && (
           <button type="button" className={styles.clear} onClick={onReset}>
-            Limpiar
+            {t('filters.clear')}
           </button>
         )}
       </div>
 
-      {filtering && (
-        <p className={styles.resultCount}>
-          {resultCount} {resultCount === 1 ? 'resultado' : 'resultados'}
-        </p>
-      )}
+      {filtering && <p className={styles.resultCount}>{t('filters.results', { count: resultCount })}</p>}
     </div>
   )
 }

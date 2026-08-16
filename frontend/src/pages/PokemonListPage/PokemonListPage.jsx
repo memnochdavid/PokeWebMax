@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import usePokemonList from '../../hooks/usePokemonList.js'
 import usePokemonBrowser from '../../hooks/usePokemonBrowser.js'
 import usePokemonNames from '../../hooks/usePokemonNames.js'
@@ -14,6 +15,7 @@ const officialArtworkUrl = (id) =>
 export default function PokemonListPage() {
   const { status, pokemon, error, reload } = usePokemonList()
   const { language } = useLanguage()
+  const { t } = useTranslation()
   const names = usePokemonNames()
   const { filters, setFilter, resetFilters, filtering, generations, activeGeneration, setActiveGeneration, visible } =
     usePokemonBrowser(pokemon, { names, language })
@@ -22,18 +24,18 @@ export default function PokemonListPage() {
     <section className={styles.page}>
       <div className={styles.header}>
         <div>
-          <span className="eyebrow">Pokédex nacional</span>
-          <h1 className={styles.title}>Pokémon</h1>
+          <span className="eyebrow">{t('list.eyebrow')}</span>
+          <h1 className={styles.title}>{t('list.title')}</h1>
         </div>
         <button type="button" className={styles.reload} onClick={reload} disabled={status === 'loading'}>
-          {status === 'loading' ? 'Cargando…' : 'Recargar'}
+          {status === 'loading' ? t('list.loading') : t('list.reload')}
         </button>
       </div>
 
       {status === 'error' && <p className={styles.error}>{error}</p>}
 
       {status === 'success' && pokemon.length === 0 && (
-        <p className={styles.empty}>Todavía no hay ningún Pokémon cacheado.</p>
+        <p className={styles.empty}>{t('list.empty')}</p>
       )}
 
       {pokemon.length > 0 && (
@@ -55,7 +57,7 @@ export default function PokemonListPage() {
           )}
 
           {visible.length === 0 ? (
-            <p className={styles.empty}>Ningún Pokémon coincide con estos filtros.</p>
+            <p className={styles.empty}>{t('list.emptyFiltered')}</p>
           ) : (
             <ul className={styles.grid}>
               {visible.map((entry) => (

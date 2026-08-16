@@ -432,6 +432,29 @@
   opacity: 0.9;
 }
 
+.clickableCard {
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.clickableCard:hover,
+.clickableCard:focus-visible {
+  border-color: var(--signal);
+  outline: none;
+}
+
+.moveDescription {
+  margin: 0.6rem 0 0;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.moveDescription .tag {
+  margin-left: 0.4rem;
+}
+
 .notCached {
   font-family: var(--font-mono);
   opacity: 0.55;

@@ -1,29 +1,27 @@
 import { useCallback, useEffect, useState } from 'react'
 import axios from 'axios'
 
-const PENDING = { state: 'pending', value: 'comprobando…' }
+// Solo estados (ok/error/pending/unknown), no texto ya traducido — el texto se resuelve
+// en el render vía react-i18next (ver StatusPage.jsx), así que un cambio de idioma no
+// deja frases viejas atrapadas en este estado.
+const PENDING = { backend: 'pending', database: 'pending' }
 
 export default function useServiceHealth() {
-  const [backend, setBackend] = useState(PENDING)
-  const [database, setDatabase] = useState(PENDING)
+  const [state, setState] = useState(PENDING)
 
   const check = useCallback(() => {
-    setBackend(PENDING)
-    setDatabase(PENDING)
+    setState(PENDING)
 
     axios
       .get('/api/health')
       .then(({ data }) => {
-        setBackend({ state: 'ok', value: 'conectado' })
-        setDatabase(
-          data.database === 'ok'
-            ? { state: 'ok', value: 'conectada' }
-            : { state: 'error', value: 'sin conexión' },
-        )
+        setState({
+          backend: 'ok',
+          database: data.database === 'ok' ? 'ok' : 'error',
+        })
       })
       .catch(() => {
-        setBackend({ state: 'error', value: 'sin conexión' })
-        setDatabase({ state: 'error', value: 'desconocido' })
+        setState({ backend: 'error', database: 'unknown' })
       })
   }, [])
 
@@ -31,5 +29,5 @@ export default function useServiceHealth() {
     check()
   }, [check])
 
-  return { backend, database, retry: check }
+  return { ...state, retry: check }
 }

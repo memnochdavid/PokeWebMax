@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { RESOURCE_GROUPS } from '../utils/pokeApiResources.js'
 import { cacheAllPending } from '../utils/cachePokeApiResource.js'
+import i18n from '../i18n.js'
 
 const ALL_RESOURCE_TYPES = RESOURCE_GROUPS.flatMap((group) => group.resources.map((r) => r.type))
 
@@ -23,7 +24,7 @@ export default function useCacheEverything() {
       try {
         await cacheAllPending(resourceType)
       } catch (err) {
-        setError(err.response?.data?.error ?? `Error cacheando "${resourceType}".`)
+        setError(err.response?.data?.error ?? i18n.t('cache.errorCaching', { resourceType }))
         setStatus('error')
         return
       }
