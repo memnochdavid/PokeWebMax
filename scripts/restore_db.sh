@@ -1,17 +1,17 @@
 #!/bin/bash
 cd "$(dirname "$0")/.."
 
-# Restaura la base de datos MariaDB desde un dump hecho con dump_db.sh (.sql o
-# .sql.gz). Sin argumento, coge el más reciente de backend/var/dumps/. BORRA la base
-# de datos 'pokewebmax' entera (DROP DATABASE) y la recrea vacía antes de cargar el
-# dump — no es un simple sobrescrito tabla por tabla, así que no deja restos de tablas
-# que existan ahora mismo pero no estén en el backup. Pide confirmación salvo que se
-# pase -f/--force.
+# Restaura la base de datos MariaDB desde backup/pokewebmax.sql.gz (el único archivo
+# fijo que genera dump_db.sh, commiteado en el repo). BORRA la base de datos
+# 'pokewebmax' entera (DROP DATABASE) y la recrea vacía antes de cargar el dump — no
+# es un simple sobrescrito tabla por tabla, así que no deja restos de tablas que
+# existan ahora mismo pero no estén en el backup. Pide confirmación salvo que se pase
+# -f/--force.
 #
 # Uso:
-#   bash scripts/restore_db.sh                              # el dump más reciente
-#   bash scripts/restore_db.sh backend/var/dumps/foo.sql.gz  # uno concreto
-#   bash scripts/restore_db.sh -f backend/var/dumps/foo.sql  # sin confirmar
+#   bash scripts/restore_db.sh              # backup/pokewebmax.sql.gz
+#   bash scripts/restore_db.sh -f            # sin confirmar
+#   bash scripts/restore_db.sh otro.sql.gz   # un archivo distinto (excepcional)
 
 set -e
 
@@ -21,15 +21,7 @@ if [ "$1" = "-f" ] || [ "$1" = "--force" ]; then
     shift
 fi
 
-DUMP_FILE="$1"
-if [ -z "$DUMP_FILE" ]; then
-    DUMP_FILE="$(ls -t backend/var/dumps/*.sql.gz backend/var/dumps/*.sql 2>/dev/null | head -n 1)"
-    if [ -z "$DUMP_FILE" ]; then
-        echo "❌ No hay ningún dump en backend/var/dumps/ y no se ha indicado un archivo."
-        exit 1
-    fi
-    echo "ℹ️  Ningún archivo indicado, usando el más reciente: $DUMP_FILE"
-fi
+DUMP_FILE="${1:-backup/pokewebmax.sql.gz}"
 
 if [ ! -f "$DUMP_FILE" ]; then
     echo "❌ No existe el archivo: $DUMP_FILE"

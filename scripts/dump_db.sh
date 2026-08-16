@@ -1,16 +1,15 @@
 #!/bin/bash
 cd "$(dirname "$0")/.."
 
-# Vuelca la base de datos MariaDB completa (incluida la caché de PokeAPI) a un .sql.gz
-# con marca de tiempo en backend/var/dumps/ (gitignorado vía backend/.gitignore, /var/
-# — nunca se sube al repo). Útil antes de una migración arriesgada o para llevarte una
-# copia de lo ya cacheado a otra máquina.
+# Vuelca la base de datos MariaDB completa (incluida la caché de PokeAPI) a un único
+# archivo fijo, backup/pokewebmax.sql.gz — se SOBRESCRIBE en cada ejecución, no se
+# versiona por fecha. Gitignorado (backup/ en .gitignore): David lo pasa a mano entre
+# máquinas/equipos, no viaja con el repo (ver scripts/restore_db.sh para restaurarlo).
 
 set -e
 
-DUMP_DIR="backend/var/dumps"
-TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-DUMP_FILE="$DUMP_DIR/pokewebmax_${TIMESTAMP}.sql.gz"
+DUMP_DIR="backup"
+DUMP_FILE="$DUMP_DIR/pokewebmax.sql.gz"
 
 mkdir -p "$DUMP_DIR"
 
