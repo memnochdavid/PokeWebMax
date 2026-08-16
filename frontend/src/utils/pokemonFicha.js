@@ -46,7 +46,12 @@ export function speciesDisplayName(species, language, fallback) {
 // selector. El texto duplicado entre versiones consecutivas se sigue colapsando en una
 // sola entrada (varias ediciones suelen compartir la misma redacción) para no acabar
 // con un selector de 20+ pastillas casi idénticas.
-export function flavorTextsByVersion(species, language) {
+//
+// `wikidexFlavorText` (viene de la ficha del backend, ver PokemonFichaAssembler) es un
+// tercer nivel de fallback SOLO para español, importado offline del dump de WikiDex:
+// PokeAPI-ES -> WikiDex-ES -> PokeAPI-EN. Se cuenta como `translated: true` porque
+// realmente es texto en español, solo que de otra fuente — no lleva el tag "EN".
+export function flavorTextsByVersion(species, language, wikidexFlavorText = {}) {
   const textByVersion = new Map() // version -> { es?: string, en?: string }
   for (const entry of species?.flavor_text_entries ?? []) {
     const lang = entry.language.name
@@ -60,8 +65,12 @@ export function flavorTextsByVersion(species, language) {
 
   const seen = new Map()
   for (const [version, texts] of textByVersion) {
-    const translated = texts[language] !== undefined
-    const text = translated ? texts[language] : texts.en
+    let translated = texts[language] !== undefined
+    let text = translated ? texts[language] : texts.en
+    if (!translated && language === 'es' && wikidexFlavorText[version] !== undefined) {
+      text = wikidexFlavorText[version]
+      translated = true
+    }
     if (text === undefined) continue
     if (!seen.has(text)) {
       seen.set(text, { version, translated })

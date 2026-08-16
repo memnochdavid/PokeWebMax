@@ -17,3 +17,6 @@ backup/
 
 # Dump de Wikidex
 scripts/wikidex_dump
+
+# Bytecode compilado de los scripts Python
+__pycache__/

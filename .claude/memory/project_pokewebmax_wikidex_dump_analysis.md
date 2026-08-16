@@ -88,31 +88,99 @@ fuente que el doc `docs/reference-android/wikidex-scraping-system.md` marcaba co
 (ver [[project_pokewebmax_progress]]). Mismo parser reutilizable (mismo formato
 clave=valor con alias y wikitexto).
 
-## Plan de integración acordado (pendiente de implementar)
+## Plan de integración acordado
 
-1. Mini-parser de wikitext en PHP (o Python, ver más abajo) para el bloque
-   `{{Pokédex}}`/`{{Localización}}`: split por líneas `| clave = valor`, resolver
-   alias, resolver `NombreHaEs`/`N`, limpiar markup, descartar `"no hay"`.
-2. Tabla de mapeo clave-WikiDex → `version` slug de PokeAPI (la lista de arriba).
-3. **Nueva entidad Doctrine pequeña, NO la tabla genérica `pokeapi_resource_cache`**
-   (esto no es un recurso de PokeAPI, es de WikiDex — coincide con lo que ya
-   anticipaba [[project_pokewebmax_architecture_decisions]] punto sobre WikiDex).
-   Algo como `WikidexFlavorText` (nombre especie/slug, versionSlug o claveWikidex
-   cruda, texto).
-4. **Comando de importación offline** (`bin/console app:wikidex:import` o similar) que
-   lee `wikidex.sqlite` directamente y puebla esa tabla — una sola vez (o
-   re-ejecutable si se regenera el dump). Nunca hace peticiones en vivo a wikidex.net.
-   Detalle técnico pendiente de decidir: el contenedor backend solo tiene
-   `pdo_mysql`, no `pdo_sqlite` — o se añade la extensión al `backend.Dockerfile`, o
-   se hace el parseo en Python (ya usado en el proyecto para el propio dump) volcando
-   a JSON/CSV intermedio que el comando de Symfony importa a MariaDB.
-5. Encaje final en el flujo ya existente: `flavorTextsByVersion()`
-   (`utils/pokemonFicha.js`, ver sección "Fallback de descripción por versión" de
-   [[project_pokewebmax_progress]]) gana un tercer nivel — PokeAPI-ES → WikiDex-ES →
-   PokeAPI-EN — en vez de caer directo a inglés cuando PokeAPI no tiene español.
+1. ✅ **Hecho (2026-08-17)**: `scripts/wikidex_parser.py` — parser de wikitext puro
+   (stdlib, sin dependencias) para `{{Pokédex}}`/`{{Localización}}`. Extracción por
+   profundidad de llaves (no heurísticas de `\n}}`), split de campos consciente de
+   plantillas anidadas multilínea, resolución de alias y de `NombreHaEs`/`N`/`n`
+   (con `[[enlace|pipe]]` anidado dentro del propio parámetro — visto en
+   Farfetch'd/Snorunt), limpieza de wikitexto a texto plano. Validado contra el dump
+   completo: 1.081 especies con bloque real, 23.289 entradas de descripción y 19.412
+   de localización, **0 restos de markup sin limpiar** tras la validación.
+   - Bug real encontrado y corregido durante la validación: `find_template_block`
+     hacía match por prefijo de nombre, así que `{{Pokédex EP}}` (plantilla de
+     episodios de anime, campos `ES`/`HA`/`Pokémon`/`imagen` propios, nada que ver)
+     se confundía con `{{Pokédex}}` — inflaba el conteo de especies "con bloque" de
+     1081 (real) a 1638 (falsos positivos incluidos) y colaba texto basura como si
+     fuera descripción. Corregido comprobando que tras el nombre venga `|` o `}}`
+     (ignorando espacios), no más texto.
+   - Otro bug real corregido: alias como `NombreHaEs` también aparecen como `N`, `n`
+     y `nombreHaEs` en el dump (primera letra insensible a mayúsculas, convención de
+     MediaWiki) — el regex inicial solo cubría `NombreHaEs`/`N`.
+   - CLI de prueba: `python3 scripts/wikidex_parser.py <Título> [--localizacion]
+     [--by-version] [--variant es|ha]`.
+2. ✅ **Hecho (2026-08-17)**: `WIKIDEX_KEY_TO_POKEAPI_VERSIONS` en el mismo archivo —
+   35 claves WikiDex → 37 slugs `version` de PokeAPI (rojoyazul y lgpe son 1:2).
+   **Verificado contra los 53 `version` reales ya cacheados en la BD del propio
+   proyecto** (`docker exec pokewebmax_db mariadb -uroot -proot pokewebmax -e
+   "SELECT resource_id, name FROM pokeapi_resource_cache WHERE
+   resource_type='version'"`), no de memoria — evita typos de slug silenciosos.
+   `pokedex_by_pokeapi_version(wikitext)` da el resultado ya indexado por slug de
+   PokeAPI, listo para cruzar con `flavor_text_entries[].version.name`. Cobertura
+   validada sobre las 1.081 especies: 17.189 entradas mapeadas; solo 10 claves
+   sueltas sin cubrir en todo el dump, y son typos reales del wikitext de WikiDex
+   (`sleeep`, `slowbro`, `azul` suelto en Mankey, `| generación` con pipe doblado en
+   Pikachu con gorra...), no fallos del parser — se ignoran a propósito.
+3. ✅ **Hecho (2026-08-17)**: entidad `App\Entity\WikidexFlavorText`
+   (`backend/src/Entity/WikidexFlavorText.php`) — tabla `wikidex_flavor_text`
+   (`pokemon_species_id`, `version_slug`, `text`, `imported_at`; unique constraint
+   `(pokemon_species_id, version_slug)`), separada de `pokeapi_resource_cache` tal
+   como anticipaba [[project_pokewebmax_architecture_decisions]]. `pokemonSpeciesId`
+   es el `resourceId` real de la fila `pokemon-species` cacheada, no un slug/nombre —
+   FK implícita hacia el mismo espacio de ids que usa el resto de la app. Migración
+   `Version20260816221109` ya generada y aplicada. Repositorio
+   `WikidexFlavorTextRepository` (de momento solo boilerplate + `findOneBySpeciesAndVersion`,
+   el método de lectura por especie para el paso 5 se añadirá cuando haga falta).
+4. ✅ **Hecho (2026-08-17), decisión tomada: Python para el parseo, PHP solo para el
+   cruce y la escritura** — no se tocó `backend.Dockerfile` (sin `pdo_sqlite`).
+   - `scripts/wikidex_export_flavor_text.py`: reusa `wikidex_parser.py`
+     (`pokedex_by_pokeapi_version`) y vuelca todas las páginas con bloque `{{Pokédex}}`
+     real a `backend/var/wikidex_import/flavor_text.json` (`[{"title", "versions":
+     {slug: texto}}, ...]`). Ese path cae dentro de `backend/var/` (ya gitignorado)
+     porque `docker-compose.yml` solo monta `./backend`, no `./scripts` — el JSON
+     tiene que estar dentro del volumen del contenedor backend para que el comando
+     Symfony lo vea.
+   - `App\Command\WikidexImportCommand` (`bin/console app:wikidex:import [jsonPath]`):
+     cruza cada `title` contra `PokeApiResourceCacheRepository::findSpeciesLocalizedNames(['es'])`
+     (nombre en español ya cacheado, comparación por igualdad exacta — funcionó sin
+     normalizar comillas: PokeAPI y WikiDex usan el mismo `’` U+2019 curvo para
+     Farfetch’d) y hace upsert en `wikidex_flavor_text`. Precarga todas las filas
+     existentes en memoria antes del loop (evita 17k SELECT sueltos). Idempotente —
+     re-ejecutar no duplica filas, verificado con dos ejecuciones seguidas.
+   - **Gotcha real encontrado al ejecutarlo**: con las ~17k entradas en un solo
+     `flush()`, el profiler de Doctrine en modo dev (`APP_ENV=dev`, backtrace por
+     query en `BacktraceDebugDataHolder`) agota el `memory_limit` de PHP por defecto
+     (128M) — hace falta `-d memory_limit=768M` al invocar `bin/console` para este
+     comando en concreto. Ya envuelto en `scripts/import_wikidex.sh` (encadena los
+     dos pasos, exportar + importar), así que no hay que recordarlo a mano.
+   - **Resultado real de la primera importación**: 1025/1025 `pokemon-species`
+     cacheadas cruzadas con éxito (100%), 16.943 filas escritas. 56 títulos de
+     WikiDex sin cruzar — todos formas regionales con página propia en WikiDex
+     (Raichu de Alola, Corsola de Galar, Pikachu con gorra...) que en PokeAPI NO son
+     una `pokemon-species` independiente sino una variante/forma de la especie base;
+     PokeAPI tampoco tiene flavor text por forma, así que no hay donde encajarlas con
+     el modelo de datos actual — limitación conocida, no bug del importador.
+5. ✅ **Hecho (2026-08-17)**: encaje en el flujo ya existente.
+   - `WikidexFlavorTextRepository::findTextsBySpeciesId(int $speciesId): array`
+     (versionSlug -> texto), usada en `PokemonFichaAssembler::assemble()`: la ficha
+     ahora incluye `wikidexFlavorText` (array vacío si la especie no está cacheada).
+   - `flavorTextsByVersion(species, language, wikidexFlavorText = {})` en
+     `frontend/src/utils/pokemonFicha.js` gana el tercer nivel: si PokeAPI no tiene
+     `language` para esa versión y `language === 'es'`, usa el texto de WikiDex y lo
+     marca `translated: true` (es español real, solo que de otra fuente — no lleva
+     el tag "EN"). `PokemonFichaPage.jsx` pasa `ficha.wikidexFlavorText` a la llamada.
+   - **Verificado con datos reales** (no simulado): ejecutando el módulo JS real
+     contra la ficha real de Bulbasaur devuelta por el backend, `red/yellow/gold/
+     silver/crystal/ruby/firered/diamond` pasaron de `translated: false` (inglés) a
+     `translated: true` (español, vía WikiDex), y `leafgreen` apareció en el selector
+     por primera vez (PokeAPI no tenía ninguna entrada para esa versión, ni en
+     inglés).
 
-**Not empezado todavía**: David cortó la sesión aquí (surgió algo urgente) justo
-después de acordar el plan de arriba, antes de escribir ningún código. La siguiente
-sesión puede arrancar directo por el paso 1 (parser) sin tener que re-examinar el
-dump — todo lo necesario (estructura, claves, casos especiales, decisión de
-arquitectura) ya está en esta nota.
+**Estado (2026-08-17): plan completo, pasos 1-5 hechos y verificados con datos
+reales** (16.943 filas en `wikidex_flavor_text`, fallback funcionando end-to-end en
+la ficha de Bulbasaur). Reimportar tras regenerar el dump: `bash
+scripts/import_wikidex.sh`. Posible trabajo futuro no pedido todavía: las 56 formas
+regionales sin cruzar (punto 4) y la pestaña de Ubicaciones con `{{Localización}}`
+(el parser ya lo soporta vía `parse_localizacion()`, solo falta el mismo cableado de
+exportación/importación/frontend que este documento describe para descripciones).

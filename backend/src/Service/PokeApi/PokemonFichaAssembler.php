@@ -4,11 +4,14 @@ namespace App\Service\PokeApi;
 
 use App\Entity\PokeApiResourceCache;
 use App\Repository\PokeApiResourceCacheRepository;
+use App\Repository\WikidexFlavorTextRepository;
 
 class PokemonFichaAssembler
 {
-    public function __construct(private readonly PokeApiResourceCacheRepository $repository)
-    {
+    public function __construct(
+        private readonly PokeApiResourceCacheRepository $repository,
+        private readonly WikidexFlavorTextRepository $wikidexFlavorTextRepository,
+    ) {
     }
 
     /**
@@ -45,6 +48,13 @@ class PokemonFichaAssembler
             'moves' => $moves,
             'abilities' => $abilities,
             'forms' => $forms,
+            // Fallback de descripción en español (ver flavorTextsByVersion() en
+            // frontend/src/utils/pokemonFicha.js) para versiones donde PokeAPI no
+            // tiene flavor_text_entries en 'es' — importado offline del dump de
+            // WikiDex, ver .claude/memory/project_pokewebmax_wikidex_dump_analysis.md.
+            'wikidexFlavorText' => $species !== null
+                ? $this->wikidexFlavorTextRepository->findTextsBySpeciesId($species->getResourceId())
+                : [],
             'missing' => [
                 'species' => $species === null,
                 'evolutionChain' => $evolutionChain === null,

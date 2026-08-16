@@ -676,8 +676,28 @@ genérica de PokeAPI) + comando de importación offline — todo el detalle téc
 (claves de juego, alias, subplantillas, casos raros) está en esa nota, no hace falta
 re-abrir el dump de 446MB para recordarlo.
 
-**Sesión cortada aquí** (David tuvo que irse) justo tras acordar el plan, antes de
-escribir código — la siguiente sesión puede arrancar directo por el parser.
+## WikiDex: integración completa — HECHO 2026-08-17
+
+Los 5 pasos del plan de la sesión anterior, hechos y verificados con datos reales (ver
+[[project_pokewebmax_wikidex_dump_analysis]] para el detalle técnico completo de cada
+uno — parser wikitext, tabla de mapeo a `version` de PokeAPI, entidad
+`WikidexFlavorText` + migración, comando `app:wikidex:import`, y el tercer nivel de
+`flavorTextsByVersion()`). BD local ya poblada: 16.943 filas en `wikidex_flavor_text`
+(1025/1025 especies cacheadas cruzadas). Reimportar tras regenerar el dump: `bash
+scripts/import_wikidex.sh`.
+
+Verificado con el módulo JS real (no reimplementado) contra la ficha real de
+Bulbasaur: `red/yellow/gold/silver/crystal/ruby/firered/diamond` pasan de mostrarse
+en inglés a español, y `leafgreen` aparece en el selector por primera vez. No
+verificado a ojo en navegador (sin `claude-in-chrome` disponible esta sesión) — mismo
+hueco de siempre, ver nota de arriba sobre el selector ES/EN.
+
+**No pedido todavía, posible trabajo futuro:** las 56 formas regionales de WikiDex sin
+especie propia en PokeAPI (Raichu de Alola, Corsola de Galar...) se quedan sin
+fallback — limitación del modelo de datos (PokeAPI no tiene flavor text por forma), no
+un bug. Y la pestaña Ubicaciones con `{{Localización}}`: el parser ya lo soporta
+(`parse_localizacion()`), pero falta todo el cableado de exportación/entidad/import/
+frontend — mismo patrón que este documento, sin empezar.
 
 ## Pendiente / siguiente paso natural
 

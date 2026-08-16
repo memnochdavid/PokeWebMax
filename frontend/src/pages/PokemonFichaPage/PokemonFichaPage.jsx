@@ -46,14 +46,14 @@ export default function PokemonFichaPage() {
   if (status === 'error') return <p className={styles.statusError}>{error}</p>
   if (!ficha) return null
 
-  const { species, evolutionChain, moves, abilities, forms, missing } = ficha
+  const { species, evolutionChain, moves, abilities, forms, missing, wikidexFlavorText } = ficha
   const types = pokemon.types.map((t) => t.type.name)
   const primaryColor = typeColor(types[0])
   const secondaryColor = typeColor(types[1] ?? types[0])
   const missingTotal = totalMissing(missing)
   const generation = generationNumber(species)
 
-  const versions = flavorTextsByVersion(species, language)
+  const versions = flavorTextsByVersion(species, language, wikidexFlavorText)
   const activeVersion = versions.find((v) => v.version === selectedVersion) ?? versions[0]
   const displayName = speciesDisplayName(species, language, capitalize(pokemon.name))
 
