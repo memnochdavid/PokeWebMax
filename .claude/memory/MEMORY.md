@@ -7,3 +7,4 @@
 - [Análisis del dump de WikiDex](project_pokewebmax_wikidex_dump_analysis.md) — estructura del dump local, cómo cruza con PokeAPI, plan de integración pendiente
 - [No colapsar datos en silencio](feedback_no_silent_data_collapsing.md) — David prefiere ver cada entrada real (aunque coincida con otra) antes que una UI compacta que oculte datos
 - [Verificar cifras de cobertura bajas](feedback_verify_low_coverage_numbers.md) — un cruce por nombre con cobertura sorprendentemente baja suele ser un bug de matching, no un hueco real de datos
+- [Idea: app de escritorio offline](project_pokewebmax_desktop_offline_idea.md) — Tauri + SQLite explorado, no decidido ni empezado
