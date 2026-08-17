@@ -13,8 +13,11 @@ use App\Repository\PokeApiResourceCacheRepository;
  * viene de caché local ya proyectada por JSON_EXTRACT — no dispara llamadas nuevas a
  * PokeAPI salvo la lista maestra de especies (ver PokeApiClient::fetchResourceList).
  * Asume que el id de `pokemon-species` coincide con el de su variante por defecto en
- * `pokemon` — cierto para las ~1025 especies base; no se usa aquí para formas
- * especiales, que no se listan en esta vista.
+ * `pokemon` — cierto para las ~1025 especies base.
+ * `variants` (mega/gigamax/regional, con id y tipos propios) va también en cada fila
+ * para que el frontend pueda mostrar la variante real en vez de la especie base
+ * cuando el filtro de Mega/Gigamax/Regional está activo (ver
+ * .claude/memory/project_pokewebmax_progress.md).
  */
 class PokemonListService
 {
@@ -54,6 +57,7 @@ class PokemonListService
      *     generation: ?int, legendary: bool, mythical: bool,
      *     hasMega: bool, hasGmax: bool, hasRegional: bool, evolutionStages: ?int,
      *     captureRate: ?int, weight: ?int, height: ?int, statsTotal: ?int,
+     *     variants: array<int, array{id: int, name: string, kind: string, types: string[]}>,
      * }>
      */
     public function listAll(): array
@@ -71,6 +75,10 @@ class PokemonListService
                 $summary = $speciesSummaries[$entry['id']] ?? null;
                 $evolutionChainId = $summary['evolutionChainId'] ?? null;
                 $metrics = $listMetrics[$entry['id']] ?? null;
+                $variants = array_map(
+                    static fn (array $variant) => $variant + ['types' => $typesById[$variant['id']] ?? []],
+                    $summary['variants'] ?? [],
+                );
 
                 return [
                     'id' => $entry['id'],
@@ -89,6 +97,7 @@ class PokemonListService
                     'weight' => $metrics['weight'] ?? null,
                     'height' => $metrics['height'] ?? null,
                     'statsTotal' => $metrics['statsTotal'] ?? null,
+                    'variants' => $variants,
                 ];
             },
             $entries,

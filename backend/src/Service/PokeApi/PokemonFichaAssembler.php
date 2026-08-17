@@ -41,7 +41,13 @@ class PokemonFichaAssembler
             : null;
         $moves = $this->resolveMany('move', array_column($payload['moves'] ?? [], 'move'));
         $abilities = $this->resolveMany('ability', array_column($payload['abilities'] ?? [], 'ability'));
-        $forms = $this->resolveMany('pokemon-form', $payload['forms'] ?? []);
+        // `pokemon.forms` (lo que se usaba antes) solo trae la forma por defecto de
+        // ESTE pokemon en concreto — para ver regionales/mega/gigamax hay que ir a
+        // `species.varieties`, que si lista todas las variantes reales (cada una con
+        // su propio `pokemon`, no `pokemon-form`: así se resuelven también sprites y
+        // tipos propios, ver .claude/memory/project_pokewebmax_progress.md).
+        $varieties = $species?->getPayload()['varieties'] ?? [];
+        $forms = $this->resolveMany('pokemon', array_column($varieties, 'pokemon'));
 
         return [
             'pokemon' => $payload,

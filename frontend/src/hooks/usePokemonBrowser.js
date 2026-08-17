@@ -47,6 +47,25 @@ function hasActiveFilters(filters) {
   )
 }
 
+// Al filtrar por Mega/Gigamax/Regional, mostrar la VARIANTE real (su propio id,
+// nombre y tipos — ej. 'raichu-alola', eléctrico/psíquico) en vez de la especie base
+// que simplemente "tiene" esa variante — pedido explícito de David, antes filtrar por
+// Mega mostraba a Raichu normal, no a Raichu Mega X/Y. Si una especie tiene varias
+// variantes que encajan (ej. Raichu con mega X y mega Y a la vez) se muestran todas.
+const VARIANT_FILTER_KINDS = { mega: 'mega', gmax: 'gmax', regional: 'regional' }
+
+function expandToVariants(entry, filters) {
+  const activeKinds = Object.entries(VARIANT_FILTER_KINDS)
+    .filter(([filterKey]) => filters[filterKey])
+    .map(([, kind]) => kind)
+  if (activeKinds.length === 0) return [entry]
+
+  const matches = (entry.variants ?? []).filter((v) => activeKinds.includes(v.kind))
+  if (matches.length === 0) return [entry]
+
+  return matches.map((variant) => ({ ...entry, ...variant, baseId: entry.id, baseName: entry.name }))
+}
+
 function matchesFilters(entry, filters, displayName) {
   const query = filters.query.trim().toLowerCase()
   if (query !== '') {
@@ -90,7 +109,8 @@ export default function usePokemonBrowser(pokemonList, { names = {}, language = 
     const base = filtering
       ? pokemonList.filter((entry) => matchesFilters(entry, filters, names[entry.id]?.names[language]))
       : pokemonList.filter((entry) => entry.generation === activeGeneration)
-    return [...base].sort(compareBy(sortKey, sortDirection, names, language))
+    const expanded = filtering ? base.flatMap((entry) => expandToVariants(entry, filters)) : base
+    return [...expanded].sort(compareBy(sortKey, sortDirection, names, language))
   }, [pokemonList, filters, filtering, activeGeneration, names, language, sortKey, sortDirection])
 
   const setFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }))

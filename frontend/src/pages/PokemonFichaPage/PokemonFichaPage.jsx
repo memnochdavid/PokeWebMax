@@ -64,7 +64,7 @@ const MOVE_SORTS = {
 // Cabecera clicable de cada sección — colapsa/expande con animación (ver
 // .collapseWrap en el CSS, truco de grid-template-rows 1fr/0fr en vez de max-height a
 // mano). Componente aparte porque se repite igual en las 7 secciones.
-function SectionHeading({ label, sectionKey, collapsed, onToggle }) {
+function SectionHeading({ label, sectionKey, collapsed, onToggle, color }) {
   const isCollapsed = collapsed.has(sectionKey)
   return (
     <button
@@ -73,8 +73,13 @@ function SectionHeading({ label, sectionKey, collapsed, onToggle }) {
       onClick={() => onToggle(sectionKey)}
       aria-expanded={!isCollapsed}
     >
-      <h2 className={styles.sectionHeading}>{label}</h2>
-      <span className={isCollapsed ? `${styles.collapseChevron} ${styles.collapseChevronClosed}` : styles.collapseChevron}>
+      <h2 className={styles.sectionHeading} style={{ color, borderColor: color }}>
+        {label}
+      </h2>
+      <span
+        className={isCollapsed ? `${styles.collapseChevron} ${styles.collapseChevronClosed}` : styles.collapseChevron}
+        style={{ color }}
+      >
         ▾
       </span>
     </button>
@@ -100,12 +105,24 @@ export default function PokemonFichaPage() {
       setMoveSortDirection('asc')
     }
   }
-  const [collapsedSections, setCollapsedSections] = useState(() => new Set())
+  // Todas colapsadas al abrir la ficha (pedido explícito de David) — se reinicia al
+  // navegar a otra ficha (evolución), no solo en la primera carga de la app.
+  const [collapsedSections, setCollapsedSections] = useState(() => new Set(FICHA_SECTIONS.map((s) => s.key)))
+  useEffect(() => {
+    setCollapsedSections(new Set(FICHA_SECTIONS.map((s) => s.key)))
+  }, [idOrName])
   const toggleCollapse = (key) =>
     setCollapsedSections((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
+      return next
+    })
+  const expandSection = (key) =>
+    setCollapsedSections((prev) => {
+      if (!prev.has(key)) return prev
+      const next = new Set(prev)
+      next.delete(key)
       return next
     })
   const toggleMove = (id) =>
@@ -115,15 +132,6 @@ export default function PokemonFichaPage() {
       else next.add(id)
       return next
     })
-  // Arranca a 0 y "crece" un frame después del montaje (ver StatRadarChart/.statBarFill)
-  // — con idOrName en las deps se reinicia al navegar de una ficha a otra (evolución).
-  const [statsAnimated, setStatsAnimated] = useState(false)
-  useEffect(() => {
-    setStatsAnimated(false)
-    const frame = requestAnimationFrame(() => setStatsAnimated(true))
-    return () => cancelAnimationFrame(frame)
-  }, [idOrName])
-
   const pokemon = ficha?.pokemon
   const heroImage = useImageFallback(
     pokemon ? spriteHomeUrl(pokemon.id) : null,
@@ -142,8 +150,14 @@ export default function PokemonFichaPage() {
   const sectionRefs = useRef({})
   const scrollToSection = (key) => {
     setSection(key)
+    expandSection(key)
     if (window.matchMedia('(min-width: 901px)').matches) {
-      sectionRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      // Un frame para dar tiempo a que el colapso se expanda antes de calcular el
+      // scroll — si estaba colapsada, scrollIntoView con la sección todavía a 0fr de
+      // alto apuntaría al sitio equivocado.
+      requestAnimationFrame(() => {
+        sectionRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
     }
   }
 
@@ -166,6 +180,22 @@ export default function PokemonFichaPage() {
     return () => observer.disconnect()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ficha])
+
+  // La animación de crecimiento (StatRadarChart/.statBarFill) se dispara cada vez que
+  // la sección STATS está visible Y expandida — no es un state propio, es derivado de
+  // esas dos señales, así que se reinicia sola al salir de vista por scroll o al
+  // colapsar la sección (pedido explícito de David), sin lógica extra.
+  const [statsInView, setStatsInView] = useState(false)
+  useEffect(() => {
+    const el = sectionRefs.current.STATS
+    if (!el) return undefined
+    const observer = new IntersectionObserver(([entry]) => setStatsInView(entry.isIntersecting), {
+      threshold: 0.15,
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [ficha])
+  const statsAnimated = statsInView && !collapsedSections.has('STATS')
 
   if (status === 'loading') return <p className={styles.status}>{t('ficha.loading')}</p>
   if (status === 'error') return <p className={styles.statusError}>{error}</p>
@@ -284,7 +314,7 @@ export default function PokemonFichaPage() {
           data-section-key="DESC"
           className={sectionClassName(styles, 'DESC', section)}
         >
-          <SectionHeading label={sectionLabel.DESC[language]} sectionKey="DESC" collapsed={collapsedSections} onToggle={toggleCollapse} />
+          <SectionHeading label={sectionLabel.DESC[language]} sectionKey="DESC" collapsed={collapsedSections} onToggle={toggleCollapse} color={primaryColor} />
           <div className={collapseWrapClassName(styles, 'DESC', collapsedSections)}>
           <div className={styles.collapseInner}>
             {versions.length > 0 ? (
@@ -345,7 +375,7 @@ export default function PokemonFichaPage() {
           data-section-key="EVOS"
           className={sectionClassName(styles, 'EVOS', section)}
         >
-          <SectionHeading label={sectionLabel.EVOS[language]} sectionKey="EVOS" collapsed={collapsedSections} onToggle={toggleCollapse} />
+          <SectionHeading label={sectionLabel.EVOS[language]} sectionKey="EVOS" collapsed={collapsedSections} onToggle={toggleCollapse} color={primaryColor} />
           <div className={collapseWrapClassName(styles, 'EVOS', collapsedSections)}>
           <div className={styles.collapseInner}>
           {evolutionChain ? (
@@ -391,7 +421,7 @@ export default function PokemonFichaPage() {
           data-section-key="STATS"
           className={sectionClassName(styles, 'STATS', section)}
         >
-          <SectionHeading label={sectionLabel.STATS[language]} sectionKey="STATS" collapsed={collapsedSections} onToggle={toggleCollapse} />
+          <SectionHeading label={sectionLabel.STATS[language]} sectionKey="STATS" collapsed={collapsedSections} onToggle={toggleCollapse} color={primaryColor} />
           <div className={collapseWrapClassName(styles, 'STATS', collapsedSections)}>
           <div className={styles.collapseInner}>
           <div className={styles.statsPanel}>
@@ -428,7 +458,7 @@ export default function PokemonFichaPage() {
           data-section-key="ABILITY"
           className={sectionClassName(styles, 'ABILITY', section)}
         >
-          <SectionHeading label={sectionLabel.ABILITY[language]} sectionKey="ABILITY" collapsed={collapsedSections} onToggle={toggleCollapse} />
+          <SectionHeading label={sectionLabel.ABILITY[language]} sectionKey="ABILITY" collapsed={collapsedSections} onToggle={toggleCollapse} color={primaryColor} />
           <div className={collapseWrapClassName(styles, 'ABILITY', collapsedSections)}>
           <div className={styles.collapseInner}>
           <ul className={styles.cardList}>
@@ -468,7 +498,7 @@ export default function PokemonFichaPage() {
           data-section-key="MOVES"
           className={sectionClassName(styles, 'MOVES', section)}
         >
-          <SectionHeading label={sectionLabel.MOVES[language]} sectionKey="MOVES" collapsed={collapsedSections} onToggle={toggleCollapse} />
+          <SectionHeading label={sectionLabel.MOVES[language]} sectionKey="MOVES" collapsed={collapsedSections} onToggle={toggleCollapse} color={primaryColor} />
           <div className={collapseWrapClassName(styles, 'MOVES', collapsedSections)}>
           <div className={styles.collapseInner}>
           <div className={styles.moveTableWrap}>
@@ -575,7 +605,7 @@ export default function PokemonFichaPage() {
           data-section-key="INFO"
           className={sectionClassName(styles, 'INFO', section)}
         >
-          <SectionHeading label={sectionLabel.INFO[language]} sectionKey="INFO" collapsed={collapsedSections} onToggle={toggleCollapse} />
+          <SectionHeading label={sectionLabel.INFO[language]} sectionKey="INFO" collapsed={collapsedSections} onToggle={toggleCollapse} color={primaryColor} />
           <div className={collapseWrapClassName(styles, 'INFO', collapsedSections)}>
           <div className={styles.collapseInner}>
           {species ? (
@@ -642,16 +672,47 @@ export default function PokemonFichaPage() {
           data-section-key="FORM"
           className={sectionClassName(styles, 'FORM', section)}
         >
-          <SectionHeading label={sectionLabel.FORM[language]} sectionKey="FORM" collapsed={collapsedSections} onToggle={toggleCollapse} />
+          <SectionHeading label={sectionLabel.FORM[language]} sectionKey="FORM" collapsed={collapsedSections} onToggle={toggleCollapse} color={primaryColor} />
           <div className={collapseWrapClassName(styles, 'FORM', collapsedSections)}>
           <div className={styles.collapseInner}>
           <ul className={styles.cardList}>
-            {forms.map((f) => (
-              <li key={f.id} className={styles.card}>
-                {localizedName(f.payload, language, capitalize(f.name.replace(/-/g, ' ')))}
-                {!f.cached && <span className={styles.notCached}> — {t('ficha.notCachedForm')}</span>}
-              </li>
-            ))}
+            {forms.map((f) => {
+              const sprite = f.payload?.sprites?.front_default
+              // f.payload es el recurso `pokemon` de esta variedad (no `pokemon-form`
+              // — ver comentario en PokemonFichaAssembler), así que trae tipos reales
+              // pero no `names` localizados; el nombre cae al slug formateado.
+              const formTypes = f.payload?.types?.map((t) => t.type.name) ?? []
+              const [formColor1, formColor2] =
+                formTypes.length > 0
+                  ? [typeColor(formTypes[0]), typeColor(formTypes[1] ?? formTypes[0])]
+                  : [primaryColor, secondaryColor]
+              const cardContent = (
+                <>
+                  {sprite ? (
+                    <img className={styles.formSprite} src={sprite} alt="" width={56} height={56} />
+                  ) : (
+                    <div className={styles.formSprite} />
+                  )}
+                  <div>
+                    <strong>{capitalize(f.name.replace(/-/g, ' '))}</strong>
+                    {!f.cached && <span className={styles.formNotCached}>{t('ficha.notCachedForm')}</span>}
+                  </div>
+                </>
+              )
+              const style = { background: `linear-gradient(90deg, ${formColor1} 0%, ${formColor2} 100%)` }
+
+              return (
+                <li key={f.id} className={styles.formCard} style={style}>
+                  {f.cached && f.id !== pokemon.id ? (
+                    <Link to={`/ficha/${f.id}`} className={styles.formCardInner}>
+                      {cardContent}
+                    </Link>
+                  ) : (
+                    <div className={styles.formCardInner}>{cardContent}</div>
+                  )}
+                </li>
+              )
+            })}
           </ul>
           </div>
           </div>

@@ -14,10 +14,10 @@
   flex-wrap: wrap;
   gap: 1rem;
   padding: 0.9rem 1.5rem;
-  background: color-mix(in srgb, var(--chassis-900) 88%, transparent);
+  background: var(--nav-bg);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--line);
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--signal) 25%, transparent);
+  border-bottom: 1px solid var(--nav-border);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--nav-border) 60%, transparent);
 }
 
 .brand {
@@ -28,15 +28,15 @@
   font-weight: 700;
   font-size: 1.05rem;
   letter-spacing: 0.02em;
-  color: var(--text-h);
+  color: var(--nav-text);
 }
 
 .brandDot {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 50%;
-  background: var(--signal);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 20%, transparent), 0 0 8px var(--signal);
+  background: var(--nav-brand-dot);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nav-brand-dot) 20%, transparent), 0 0 8px var(--nav-brand-dot);
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -65,7 +65,7 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.78rem;
-  color: var(--text);
+  color: var(--nav-text-muted);
   text-decoration: none;
   padding: 0.5rem 0.9rem;
   border-radius: 0.4rem;
@@ -74,23 +74,23 @@
 }
 
 .links a:hover {
-  color: var(--text-h);
-  border-color: var(--line);
+  color: var(--nav-text);
+  border-color: var(--nav-pill-border);
 }
 
 .navActive {
-  color: var(--text-h) !important;
-  border-color: var(--signal) !important;
-  background: color-mix(in srgb, var(--signal) 12%, transparent);
+  color: var(--nav-text) !important;
+  border-color: var(--nav-active-border) !important;
+  background: var(--nav-active-bg);
 }
 
 .langSwitch {
   display: flex;
   gap: 0.15rem;
   padding: 0.2rem;
-  border: 1px solid var(--line);
+  border: 1px solid var(--nav-pill-border);
   border-radius: 0.5rem;
-  background: var(--chassis-800);
+  background: var(--nav-pill-bg);
 }
 
 .langButton {
@@ -98,7 +98,7 @@
   border: none;
   border-radius: 0.35rem;
   background: transparent;
-  color: var(--text);
+  color: var(--nav-text-muted);
   font-family: var(--font-mono);
   font-size: 0.7rem;
   letter-spacing: 0.04em;
@@ -107,12 +107,32 @@
 }
 
 .langButton:hover {
-  color: var(--text-h);
+  color: var(--nav-text);
 }
 
 .langActive {
   background: var(--signal);
   color: var(--signal-contrast);
+}
+
+.themeToggle {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  border: 1px solid var(--nav-pill-border);
+  border-radius: 0.5rem;
+  background: var(--nav-pill-bg);
+  color: var(--nav-text-muted);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.themeToggle:hover {
+  color: var(--nav-text);
+  border-color: var(--nav-active-border);
 }
 
 .main {

@@ -81,7 +81,7 @@ export default function PokemonListPage() {
                   <PokemonCard
                     id={entry.id}
                     name={entry.name}
-                    displayName={names[entry.id]?.names[language] ?? capitalize(entry.name)}
+                    displayName={names[entry.id]?.names[language] ?? capitalize(entry.name.replace(/-/g, ' '))}
                     sprite={officialArtworkUrl(entry.id)}
                     types={entry.types}
                   />

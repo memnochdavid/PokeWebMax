@@ -1050,6 +1050,171 @@ su Dexter local — contradice lo encontrado en `Pokedex_API` (que solo tiene `.
 Lo dejó como pendiente para buscarlo él mismo; cry también pendiente (sin fuente de
 audio confirmada todavía).
 
+## Ronda de retoques 4 de la ficha — HECHO 2026-08-17
+
+Siete retoques más sobre el rediseño de la ficha (colapso, stats animados, selects,
+formas):
+
+1. Tabla de movimientos con alto fijo (`max-height: 30rem`) y scroll interno propio
+   (`.moveTableWrap`), cabecera `<thead>` sticky dentro de ese scroll — antes una
+   tabla de 80+ movimientos obligaba a hacer scroll larguísimo por toda la página.
+2. Animación de las barras/radar de Stats **derivada**, no un `useState` propio con
+   reset manual: `statsAnimated = statsInView && !collapsedSections.has('STATS')`.
+   `statsInView` viene de un `IntersectionObserver` dedicado sobre la sección STATS.
+   Al ser derivada, se reinicia sola tanto al salir de vista por scroll como al
+   colapsar la sección, sin lógica extra — la transición CSS ya existente hace el
+   resto.
+3. Breadcrumb: "Pokémon" → "Atrás".
+4. Todas las secciones colapsadas por defecto al abrir la ficha
+   (`collapsedSections` inicial = todas las keys de `FICHA_SECTIONS`, reiniciado por
+   `idOrName` al navegar a otra ficha). Como consecuencia necesaria (no pedida pero
+   requerida para que las anclas sigan siendo útiles): `scrollToSection()` ahora
+   también expande la sección de destino antes de hacer scroll.
+5. **Nuevo componente `TypeSelect`** (`components/TypeSelect/`): un `<select>` nativo
+   no puede pintar icono+color por `<option>` de forma fiable entre navegadores, así
+   que es un desplegable propio (botón + lista flotante), cada opción con el icono y
+   el color de fondo del tipo (reusa `typeColor`/`typeIconUrl`/`typeName` de
+   `pokemonTypes.js`, mismos datos que `TypeBadge`). Sustituye los `<select>` de
+   Tipo 1/Tipo 2 en `PokemonFilters`. El select de ordenación de `/pokemon` y el de
+   columnas de movimientos se quedan nativos (no pedido, no tienen color/icono que
+   mostrar).
+6. `sectionHeading` de cada sección coloreado con `primaryColor` (color del tipo
+   principal del Pokémon) vía prop `color` en `SectionHeading`, aplicado a texto,
+   borde inferior y chevron.
+7. Sección Formas: cards con sprite (`payload.sprites.front_default`) + degradado de
+   color de tipo (mismo lenguaje visual que las cards de evolución) en vez de texto
+   plano en una lista. No son `<Link>` (una forma no siempre es un Pokémon cacheado
+   navegable aparte, a diferencia de una etapa evolutiva).
+
+**Verificado:** `vite build` de producción compiló limpio. Sprites reales de formas
+confirmados con Unown (28 formas, cada una con su propio sprite,
+`201-b.png`/`201-c.png`/...). **No verificado a ojo en navegador** — sin
+`claude-in-chrome` en toda la sesión; el desplegable de `TypeSelect` (click-fuera,
+Escape, posicionamiento del menú flotante) y la animación de Stats al hacer scroll
+son la parte más sensible a confirmar visualmente.
+
+## Formas regionales/megas/gigamax + tema claro/oscuro — HECHO 2026-08-17
+
+**Bug real encontrado (no una feature sin construir)**: la pestaña Formas usaba
+`pokemon.forms` de PokeAPI, que solo da la forma por defecto de ESE pokemon en
+concreto — para ver regionales/mega/gigamax hay que ir a `species.varieties`.
+Verificado con Raichu: `forms` daba 1 entrada, `varieties` da las 4 reales (base,
+alola, mega-x, mega-y), cada una con tipos propios distintos (alola es
+eléctrico/psíquico) y las 4 ya cacheadas.
+
+David quería las variantes visibles en DOS sitios (pregunta cerrada explícitamente:
+"en ambos... eso resolvería el problema?"):
+
+1. **Pestaña Formas de la ficha**: `PokemonFichaAssembler` ahora resuelve
+   `species.varieties[].pokemon` como recurso `pokemon` (no `pokemon-form` — los
+   espacios de id de ambos recursos NO coinciden entre sí, confirmado con SQL: el
+   `pokemon-form` id 10100 no es "raichu-alola", es una forma de Vivillon; hay que
+   seguir la URL real, no adivinar el id). Las cards ahora son `<Link>` a
+   `/ficha/{id}` con degradado de color de TIPO REAL de cada variante (antes usaba el
+   color del Pokémon base para todas). **Contrapartida aceptada**: al usar el recurso
+   `pokemon` en vez de `pokemon-form`, se pierde el nombre localizado
+   ("Raichu de Alola" → "raichu alola" formateado) porque `pokemon` no trae `names`
+   — resolver ambos recursos a la vez para tener nombre Y tipo se descartó por
+   complejidad/beneficio.
+2. **Lista principal, solo cuando el filtro correspondiente está activo**: nuevo
+   campo `variants` en `PokemonListService::listAll()` (id/nombre/tipos por variante,
+   `kind: 'mega'|'gmax'|'regional'`, mismo `findPokemonTypesById()` ya existente).
+   `usePokemonBrowser.js`: `expandToVariants()` — si el filtro Mega/Gigamax/Regional
+   está activo, la card muestra la VARIANTE real (id/nombre/tipos propios) en vez de
+   la especie base; si una especie tiene varias variantes que encajan a la vez (ej.
+   Raichu con mega X e Y) se muestran ambas. Verificado con datos reales: filtrar por
+   Mega da 97 resultados reales (Venusaur-Mega, Charizard-Mega-X con tipo
+   fuego/dragón real, etc.), no las especies base sin transformar. La lista SIN
+   filtrar sigue siendo solo las ~1025 especies, sin cambios ahí.
+
+**Tema claro/oscuro con interruptor** — antes solo `prefers-color-scheme` automático,
+sin forma de forzarlo. `contexts/ThemeContext.jsx` (mismo patrón que
+`LanguageContext`): `data-theme="light"|"dark"` en `<html>` solo se escribe cuando el
+usuario toca el interruptor (antes de eso sigue al sistema sin más), persistido en
+localStorage. CSS en `index.css`: `:root:not([data-theme='light'])` dentro del
+`@media (prefers-color-scheme: dark)` (oscuro automático salvo que se haya forzado
+claro) + `:root[data-theme='dark']` fuera del media query (fuerza oscuro aunque el
+sistema esté en claro). Botón en el navbar con icono sol/luna en SVG inline (no
+emoji, sin precedente de emoji en toda la app).
+
+**Verificado:** `vite build` de producción compiló limpio en cada paso; `variants`
+con datos reales de Raichu y filtro Mega probado con la lista completa de 1025
+especies vía fetch real al backend. **No verificado a ojo en navegador** — sin
+`claude-in-chrome` en toda la sesión.
+
+## Sprites animados (mapeo webm) + navbar rojo en claro + retoque de paleta — HECHO 2026-08-17
+
+**Bug de sprites animados que caen al fallback de icono** (ejemplos dados: Pokémon
+Paradoja, Vivillon, Toxtricity, "etc."). Auditado sistemáticamente, no solo los
+ejemplos dados: script node contra los 1351 `pokemon` cacheados vs los 1493 ficheros
+reales en `public/animated/`, primero comprobando existencia exacta del nombre que
+genera `animatedSpriteResourceName()` (284/1351 sin match), luego buscando candidatos
+por prefijo del nombre base para separar bugs de mapeo reales de contenido
+genuinamente ausente del pack.
+
+Resultado: **222 entradas nuevas en `NAME_OVERRIDES`** (`frontend/src/utils/animatedSprite.js`)
+cubriendo formas regionales/de género/Gigantamax/Totem/gorras cosméticas de
+Pikachu/tamaños de Pumpkaboo-Gourgeist/etc. cuyo nombre en español no encajaba en
+ningún caso del switch existente (ej. `vivillon` → `vivillon_floral`,
+`toxtricity-amped` → `toxtricity_aguda`, `toxtricity-low-key` → `toxtricity_grave`,
+`aegislash-blade` → `aegislash_filo`, formas Origin/Primal/Therian/Incarnate de
+legendarios, etc.). Verificado con script que confirma que las 222 claves apuntan a
+ficheros reales existentes (0 valores inválidos) y que tras el fix quedan 1288/1351
+resueltos (antes 1067/1351).
+
+**Quedan 63 sin resolver, y son genuinamente irresolubles con el pack actual (no es
+un bug de mapeo)**: los 17 Pokémon Paradoja (great-tusk, iron-*, flutter-mane,
+raging-bolt, roaring-moon, sandy-shocks, walking-wake, scream-tail, slither-wing,
+brute-bonnet, gouging-fire) y 46 "Mega"/"Mega-Z" de fantasía que no existen en los
+juegos oficiales pero sí están cacheados como `species.varieties` (ej. mega
+Chimecho, mega Falinks, mega Scovillain, mega Zygarde, Raichu-Mega-X/Y) — no hay
+asset `mega_x.webm` para ninguno de estos en el pack, solo la forma base. Esto no es
+un bug: son huecos de contenido reales, igual que los Paradoja. Si David consigue
+más `.webm` en el futuro basta con añadirlos a `public/animated/` sin tocar código
+(o añadir la entrada a `NAME_OVERRIDES` si el nombre de fichero no sigue el patrón
+por defecto).
+
+**"En Toxtricity no aparecen sus formas"**: investigado a fondo, no reproducible
+con los datos actuales. `curl` directo a `/api/pokemon/toxtricity-amped/ficha`
+devuelve las 4 variedades reales (amped/low-key/amped-gmax/low-key-gmax) con tipos
+correctos, y el JSX de la sección Formas (`PokemonFichaPage.jsx` ~L679) no tiene
+ningún filtro que pudiera ocultarlas. Conclusión: esto ya lo arregló el cambio de
+`PokemonFichaAssembler` a `species.varieties[].pokemon` de la ronda anterior (ver
+sección de arriba) — el mensaje de David probablemente es de antes de que ese fix
+se desplegara. **No verificado a ojo en navegador** (sin `claude-in-chrome`), solo
+por API — si sigue sin verse tras esto, es un bug de renderizado distinto a
+investigar aparte.
+
+**Navbar rojo en tema claro + retoque de paleta**: se añadió un juego de tokens
+específicos de navbar (`--nav-bg`, `--nav-text`, `--nav-text-muted`, `--nav-border`,
+`--nav-active-bg`, `--nav-active-border`, `--nav-brand-dot`, `--nav-pill-bg`,
+`--nav-pill-border`) en `index.css`, separados de `--chassis-*`/`--signal` a
+propósito para no arrastrar el cambio a cards/badges/otros usos de esos tokens.
+En claro: rojo Pokédex (`#cc2b2b` con blur), texto crema, punto de marca dorado
+(`#ffd23f`, solo decorativo — el badge de idioma activo sigue usando `--signal`
+para no romper el contraste ya probado texto-blanco-sobre-signal). En oscuro: los
+mismos valores de siempre (chasis translúcido), solo redirigidos a los tokens
+nuevos — cero cambio visual ahí. `App.module.css` (`.nav`, `.brand`, `.brandDot`,
+`.links a`, `.navActive`, `.langSwitch`, `.langButton`, `.langActive`,
+`.themeToggle`) reescrito para usar los tokens de navbar en vez de `--chassis-900`/
+`--text`/`--signal` directos. Retoque adicional de paleta base (ambos temas, sin
+tocar `typeColor()`/colores de acento de tipo en la ficha, que David pidió
+respetar explícitamente): claro pasado de gris frío puro a neutros ligeramente
+cálidos (`--chassis-950/900/800`, `--line`, `--text`, `--text-h`) para que
+combinen con el rojo del navbar en vez de chocar; `--signal` en claro afinado de
+`#b8630a` a `#c2660a`; oscuro con chasis algo más profundo/saturado
+(`--chassis-950` `#14171d`→`#12151b`, `--chassis-800`/`--line` con un pelín más de
+tinte azulado). Cambios contenidos a propósito — "un toque", no un rediseño.
+
+**Verificado**: `vite build` de producción limpio; `oxlint` sin avisos en los JS/JSX
+tocados; grep del CSS compilado confirma que `--nav-bg` resuelve a rojo sólido en
+claro (`#cc2b2beb`) y al chasis translúcido de siempre en oscuro
+(`color-mix(in srgb, var(--chassis-900) 88%, transparent)`), y que `--nav-brand-dot`
+resuelve a `#ffd23f`/`var(--signal)` respectivamente. **No verificado a ojo en
+navegador** (sin `claude-in-chrome` en toda la sesión) — pendiente que David
+confirme visualmente que el contraste/aspecto del navbar rojo y del retoque de
+paleta le convencen.
+
 ## Pendiente / siguiente paso natural
 
 - No hay vistas de listado/detalle navegable para ningún recurso salvo Pokémon — el resto

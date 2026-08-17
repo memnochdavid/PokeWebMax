@@ -4,7 +4,9 @@
     "status": "Estado",
     "cache": "Cachear",
     "pokemon": "Pokémon",
-    "dataLanguageAria": "Idioma de los datos"
+    "dataLanguageAria": "Idioma de los datos",
+    "themeSwitchToLight": "Cambiar a tema claro",
+    "themeSwitchToDark": "Cambiar a tema oscuro"
   },
   "status": {
     "eyebrow": "Diagnóstico del sistema",
@@ -71,7 +73,7 @@
   },
   "ficha": {
     "loading": "Cargando…",
-    "backToList": "Pokémon",
+    "backToList": "Atrás",
     "cacheBarMissing": "Faltan {{count}} recursos por cachear para completar esta ficha.",
     "cacheButton": "Cachear todo lo que falta",
     "cachingButton": "Cacheando…",

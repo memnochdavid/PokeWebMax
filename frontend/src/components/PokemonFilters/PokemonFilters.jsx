@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { useLanguage } from '../../contexts/LanguageContext.jsx'
-import { ALL_TYPES, typeName } from '../../utils/pokemonTypes.js'
 import { SORTS } from '../../hooks/usePokemonBrowser.js'
+import TypeSelect from '../TypeSelect/TypeSelect.jsx'
 import styles from './PokemonFilters.module.css'
 
 const TOGGLES = [
@@ -36,30 +36,18 @@ export default function PokemonFilters({
           value={filters.query}
           onChange={(e) => onSetFilter('query', e.target.value)}
         />
-        <select
-          className={styles.select}
+        <TypeSelect
           value={filters.type1}
-          onChange={(e) => onSetFilter('type1', e.target.value)}
-        >
-          <option value="">{t('filters.type1')}</option>
-          {ALL_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {typeName(type, language)}
-            </option>
-          ))}
-        </select>
-        <select
-          className={styles.select}
+          onChange={(value) => onSetFilter('type1', value)}
+          language={language}
+          placeholder={t('filters.type1')}
+        />
+        <TypeSelect
           value={filters.type2}
-          onChange={(e) => onSetFilter('type2', e.target.value)}
-        >
-          <option value="">{t('filters.type2')}</option>
-          {ALL_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {typeName(type, language)}
-            </option>
-          ))}
-        </select>
+          onChange={(value) => onSetFilter('type2', value)}
+          language={language}
+          placeholder={t('filters.type2')}
+        />
 
         <div className={styles.sortGroup}>
           <span className={styles.evoLabel}>{t('filters.sortBy')}</span>

@@ -4,7 +4,9 @@
     "status": "Status",
     "cache": "Cache",
     "pokemon": "Pokémon",
-    "dataLanguageAria": "Data language"
+    "dataLanguageAria": "Data language",
+    "themeSwitchToLight": "Switch to light theme",
+    "themeSwitchToDark": "Switch to dark theme"
   },
   "status": {
     "eyebrow": "System diagnostics",
@@ -71,7 +73,7 @@
   },
   "ficha": {
     "loading": "Loading…",
-    "backToList": "Pokémon",
+    "backToList": "Back",
     "cacheBarMissing": "{{count}} resources still need caching to complete this entry.",
     "cacheButton": "Cache everything missing",
     "cachingButton": "Caching…",

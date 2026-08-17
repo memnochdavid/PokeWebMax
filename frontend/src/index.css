@@ -3,17 +3,31 @@
   --font-body: 'IBM Plex Sans', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
 
-  --chassis-950: #eef1f5;
-  --chassis-900: #ffffff;
-  --chassis-800: #e4e8ee;
-  --line: #cbd2dc;
-  --text: #4a5261;
-  --text-h: #12161f;
-  --signal: #b8630a;
+  --chassis-950: #f1eeea;
+  --chassis-900: #fffdfb;
+  --chassis-800: #e7e1da;
+  --line: #d2c9bf;
+  --text: #4f4a45;
+  --text-h: #171310;
+  --signal: #c2660a;
   --signal-contrast: #ffffff;
   --ok: #1a9e63;
   --error: #d43f3f;
   --bg: var(--chassis-950);
+
+  /* Navbar: en claro tira a rojo Pokédex (pedido explícito de David), en oscuro se
+     queda con el chasis translúcido de siempre — ver bloques de tema más abajo. No
+     confundir con --signal: ese sigue siendo el acento general de la UI (y el color
+     de tipo del Pokémon manda en la ficha, esto no lo toca). */
+  --nav-bg: color-mix(in srgb, #cc2b2b 92%, transparent);
+  --nav-border: #8f1d1d;
+  --nav-text: #fff6f0;
+  --nav-text-muted: rgba(255, 255, 255, 0.78);
+  --nav-active-bg: rgba(255, 255, 255, 0.16);
+  --nav-active-border: rgba(255, 255, 255, 0.6);
+  --nav-brand-dot: #ffd23f;
+  --nav-pill-bg: rgba(255, 255, 255, 0.14);
+  --nav-pill-border: rgba(255, 255, 255, 0.4);
 
   /* 18px en vez del default de 16px: casi todo el tamaño de la app está en rem, así
      que esto escala interfaz Y texto a la vez sin tocar cada regla suelta (pedido de
@@ -28,12 +42,17 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Tema: :root de arriba es el claro (por defecto). Oscuro por preferencia del
+   sistema, salvo que el interruptor del navbar haya forzado explícitamente claro
+   (data-theme="light") — y el propio interruptor puede forzar oscuro incluso con el
+   sistema en claro (data-theme="dark"). El interruptor persiste en localStorage, ver
+   contexts/ThemeContext.jsx. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --chassis-950: #14171d;
+  :root:not([data-theme='light']) {
+    --chassis-950: #12151b;
     --chassis-900: #1b1f27;
-    --chassis-800: #242a35;
-    --line: #333c4a;
+    --chassis-800: #252b37;
+    --line: #363f4e;
     --text: #9aa3b2;
     --text-h: #eef1f6;
     --signal: #ffb238;
@@ -41,7 +60,41 @@
     --ok: #3ddc91;
     --error: #ff6b6b;
     --bg: var(--chassis-950);
+
+    --nav-bg: color-mix(in srgb, var(--chassis-900) 88%, transparent);
+    --nav-border: var(--line);
+    --nav-text: var(--text);
+    --nav-text-muted: var(--text);
+    --nav-active-bg: color-mix(in srgb, var(--signal) 12%, transparent);
+    --nav-active-border: var(--signal);
+    --nav-brand-dot: var(--signal);
+    --nav-pill-bg: var(--chassis-800);
+    --nav-pill-border: var(--line);
   }
+}
+
+:root[data-theme='dark'] {
+  --chassis-950: #12151b;
+  --chassis-900: #1b1f27;
+  --chassis-800: #252b37;
+  --line: #363f4e;
+  --text: #9aa3b2;
+  --text-h: #eef1f6;
+  --signal: #ffb238;
+  --signal-contrast: #14171d;
+  --ok: #3ddc91;
+  --error: #ff6b6b;
+  --bg: var(--chassis-950);
+
+  --nav-bg: color-mix(in srgb, var(--chassis-900) 88%, transparent);
+  --nav-border: var(--line);
+  --nav-text: var(--text);
+  --nav-text-muted: var(--text);
+  --nav-active-bg: color-mix(in srgb, var(--signal) 12%, transparent);
+  --nav-active-border: var(--signal);
+  --nav-brand-dot: var(--signal);
+  --nav-pill-bg: var(--chassis-800);
+  --nav-pill-border: var(--line);
 }
 
 * {

@@ -160,7 +160,7 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
      * slug de cada forma (ej. "charizard-mega-x", "vulpix-alola"); se detecta por
      * substring del sufijo, no hay campo explícito en PokeAPI para esto.
      *
-     * @return array<int, array{generation: ?int, legendary: bool, mythical: bool, hasMega: bool, hasGmax: bool, hasRegional: bool, evolutionChainId: ?int, captureRate: ?int}>
+     * @return array<int, array{generation: ?int, legendary: bool, mythical: bool, hasMega: bool, hasGmax: bool, hasRegional: bool, evolutionChainId: ?int, captureRate: ?int, variants: array<int, array{id: int, name: string, kind: string}>}>
      */
     public function findSpeciesSummaries(): array
     {
@@ -181,22 +181,73 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
             $generationUrl = json_decode((string) $row['generation_url']);
             $evolutionChainUrl = json_decode((string) $row['evolution_chain_url']);
             $varieties = json_decode((string) $row['varieties_json'], true) ?? [];
-            $varietyNames = array_map(static fn (array $v) => (string) ($v['pokemon']['name'] ?? ''), $varieties);
             $captureRate = json_decode((string) $row['capture_rate']);
+
+            // Variedades especiales (mega/gigamax/regional) con su propio id de
+            // `pokemon` — antes solo se guardaba un booleano "¿tiene mega?" y se
+            // perdía CUÁL era; el filtro por Mega/Gigamax/Regional de la lista ahora
+            // necesita mostrar la variedad real, no solo la especie base que la tiene
+            // (ver .claude/memory/project_pokewebmax_progress.md).
+            $variants = [];
+            foreach ($varieties as $variety) {
+                $varietyName = (string) ($variety['pokemon']['name'] ?? '');
+                $kind = $this->classifyVariety($varietyName);
+                $varietyUrl = (string) ($variety['pokemon']['url'] ?? '');
+                if ($kind === null || $varietyUrl === '') {
+                    continue;
+                }
+                $variants[] = [
+                    'id' => PokeApiUrl::idFromUrl($varietyUrl),
+                    'name' => $varietyName,
+                    'kind' => $kind,
+                ];
+            }
 
             $result[(int) $row['resource_id']] = [
                 'generation' => $generationUrl !== null ? PokeApiUrl::idFromUrl((string) $generationUrl) : null,
                 'legendary' => $this->decodeJsonBool($row['is_legendary']),
                 'mythical' => $this->decodeJsonBool($row['is_mythical']),
-                'hasMega' => $this->anyVarietyContains($varietyNames, '-mega'),
-                'hasGmax' => $this->anyVarietyContains($varietyNames, '-gmax'),
-                'hasRegional' => $this->anyVarietyContains($varietyNames, ['-alola', '-galar', '-hisui', '-paldea']),
+                'hasMega' => $this->anyVariantOfKind($variants, 'mega'),
+                'hasGmax' => $this->anyVariantOfKind($variants, 'gmax'),
+                'hasRegional' => $this->anyVariantOfKind($variants, 'regional'),
                 'evolutionChainId' => $evolutionChainUrl !== null ? PokeApiUrl::idFromUrl((string) $evolutionChainUrl) : null,
                 'captureRate' => $captureRate !== null ? (int) $captureRate : null,
+                'variants' => $variants,
             ];
         }
 
         return $result;
+    }
+
+    private function classifyVariety(string $name): ?string
+    {
+        if (str_contains($name, '-mega')) {
+            return 'mega';
+        }
+        if (str_contains($name, '-gmax')) {
+            return 'gmax';
+        }
+        foreach (['-alola', '-galar', '-hisui', '-paldea'] as $suffix) {
+            if (str_contains($name, $suffix)) {
+                return 'regional';
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<int, array{kind: string}> $variants
+     */
+    private function anyVariantOfKind(array $variants, string $kind): bool
+    {
+        foreach ($variants as $variant) {
+            if ($variant['kind'] === $kind) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -275,21 +326,4 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
         return $decoded === true || $decoded === 1;
     }
 
-    /**
-     * @param string[] $varietyNames
-     * @param string|string[] $needle
-     */
-    private function anyVarietyContains(array $varietyNames, string|array $needle): bool
-    {
-        $needles = is_array($needle) ? $needle : [$needle];
-        foreach ($varietyNames as $name) {
-            foreach ($needles as $n) {
-                if (str_contains($name, $n)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
 }
