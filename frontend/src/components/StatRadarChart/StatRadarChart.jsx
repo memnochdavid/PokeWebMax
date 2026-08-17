@@ -12,9 +12,9 @@ export const STAT_LABELS = {
 }
 
 export const MAX_STAT = 200
-const SIZE = 240
+const SIZE = 300
 const CENTER = SIZE / 2
-const RADIUS = SIZE / 2 - 36
+const RADIUS = SIZE / 2 - 44
 
 function pointFor(index, value) {
   const angle = (Math.PI * 2 * index) / STAT_ORDER.length - Math.PI / 2
@@ -22,14 +22,28 @@ function pointFor(index, value) {
   return [CENTER + r * Math.cos(angle), CENTER + r * Math.sin(angle)]
 }
 
-export default function StatRadarChart({ stats, color }) {
+// `animate`: arranca a escala 0 y "crece" hasta el tamaño real con un ligero rebote
+// (ver PokemonFichaPage, se activa un frame después del montaje) — pedido explícito
+// de David en vez de quedarse estático.
+export default function StatRadarChart({ stats, color, animate = false }) {
   const byName = Object.fromEntries(stats.map((s) => [s.stat.name, s.base_stat]))
   const points = STAT_ORDER.map((name, i) => pointFor(i, byName[name] ?? 0))
   const polygon = points.map((p) => p.join(',')).join(' ')
   const rings = [0.25, 0.5, 0.75, 1]
 
   return (
-    <svg viewBox={`0 0 ${SIZE} ${SIZE}`} width={SIZE} height={SIZE} style={{ color }}>
+    <svg
+      viewBox={`0 0 ${SIZE} ${SIZE}`}
+      width={SIZE}
+      height={SIZE}
+      style={{
+        color,
+        transform: animate ? 'scale(1)' : 'scale(0.35)',
+        opacity: animate ? 1 : 0,
+        transformOrigin: 'center',
+        transition: 'transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease',
+      }}
+    >
       {rings.map((ring) => (
         <polygon
           key={ring}

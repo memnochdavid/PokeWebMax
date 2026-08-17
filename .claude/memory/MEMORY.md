@@ -6,3 +6,4 @@
 - [Plugins de diseño requeridos](project_pokewebmax_required_plugins.md) — frontend-design y superdesign, instalar si no aparecen
 - [Análisis del dump de WikiDex](project_pokewebmax_wikidex_dump_analysis.md) — estructura del dump local, cómo cruza con PokeAPI, plan de integración pendiente
 - [No colapsar datos en silencio](feedback_no_silent_data_collapsing.md) — David prefiere ver cada entrada real (aunque coincida con otra) antes que una UI compacta que oculte datos
+- [Verificar cifras de cobertura bajas](feedback_verify_low_coverage_numbers.md) — un cruce por nombre con cobertura sorprendentemente baja suele ser un bug de matching, no un hueco real de datos

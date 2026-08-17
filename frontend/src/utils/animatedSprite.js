@@ -50,3 +50,12 @@ export function animatedSpriteResourceName(pokemonApiName) {
 export function animatedSpriteUrl(pokemonApiName) {
   return `/animated/${animatedSpriteResourceName(pokemonApiName)}.webm`
 }
+
+// Variante hembra del sprite BASE (especies con dimorfismo visual pero sin ser una
+// variedad aparte en PokeAPI, ej. Meowstic/Pyroar/Frillish — no confundir con
+// 'pikachu-f', que ya es su propia variedad y cae en el caso 'f' de arriba). Solo
+// existe para un subconjunto de especies en el pack; quien la use debe comprobar que
+// el archivo carga (ver useFemaleSpriteAvailable) antes de ofrecer el toggle.
+export function femaleAnimatedSpriteUrl(pokemonApiName) {
+  return `/animated/${animatedSpriteResourceName(pokemonApiName)}_hembra.webm`
+}

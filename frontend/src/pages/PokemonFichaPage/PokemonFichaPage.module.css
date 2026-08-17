@@ -2,14 +2,14 @@
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-  padding: 2rem;
-  max-width: 1520px;
+  padding: 2rem 1.25rem;
+  max-width: 1900px;
   margin: 0 auto;
   width: 100%;
 }
 
 .backLink {
-  align-self: flex-start;
+  flex-shrink: 0;
   color: var(--text);
   text-decoration: none;
   font-family: var(--font-mono);
@@ -17,6 +17,9 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   transition: color 0.15s ease;
+  padding-right: 0.9rem;
+  margin-right: 0.4rem;
+  border-right: 1px solid var(--line);
 }
 
 .backLink:hover {
@@ -25,7 +28,7 @@
 
 .layout {
   display: grid;
-  grid-template-columns: 380px 1fr;
+  grid-template-columns: 420px 1fr;
   gap: 1.75rem;
   align-items: start;
 }
@@ -77,7 +80,7 @@
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  height: 22rem;
+  height: 27rem;
   padding-top: 1rem;
   position: relative;
   overflow: hidden;
@@ -98,13 +101,44 @@
 }
 
 .scanChamber {
-  width: 17rem;
-  height: 17rem;
+  width: 21rem;
+  height: 21rem;
   margin-bottom: 0.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+}
+
+.genderToggle {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  gap: 0.25rem;
+  z-index: 1;
+}
+
+.genderButton {
+  cursor: pointer;
+  width: 1.9rem;
+  height: 1.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 0.35rem;
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 1.05rem;
+  line-height: 1;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.genderButton:hover {
+  color: #fff;
+}
+
+.genderButtonActive {
+  background: rgba(255, 255, 255, 0.85);
+  color: #14171d;
 }
 
 .sprite {
@@ -228,16 +262,27 @@
    sección (todas se renderizan siempre, apiladas debajo). Fijas bajo el nav de la app
    para poder saltar de sección sin tener que volver a subir del todo; se resaltan
    solas al hacer scroll (scrollspy, ver PokemonFichaPage.jsx). */
+/* Una sola barra sticky (antes breadcrumb + anclas eran dos barras apiladas, con
+   demasiado hueco y sin quedar bien juntas — ver
+   .claude/memory/project_pokewebmax_progress.md) — el breadcrumb vive dentro como
+   primer elemento, separado por un borde. */
 .tabs {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 0.4rem;
   position: sticky;
-  top: 3.6rem;
+  top: 4.1rem;
   z-index: 5;
   padding: 0.6rem 0;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
+}
+
+.tabPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
 .tab {
@@ -283,7 +328,7 @@
 .sectionBlock {
   /* Offset del scroll-to-ancla: altura combinada del nav de la app + la barra de
      anclas fija, para que el título de la sección no quede tapado debajo de ambas. */
-  scroll-margin-top: 8.5rem;
+  scroll-margin-top: 7.5rem;
 }
 
 /* Solo en móvil: una sección visible a la vez (como antes), por el mismo motivo que
@@ -294,11 +339,57 @@
   }
 }
 
+.sectionHeadingRow {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+}
+
 .sectionHeading {
   font-size: 1.15rem;
   margin: 0 0 1rem;
   padding-bottom: 0.5rem;
   border-bottom: 1px solid var(--line);
+  flex: 1;
+}
+
+.collapseChevron {
+  color: var(--text);
+  opacity: 0.6;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  transition: transform 0.2s ease;
+}
+
+.collapseChevronClosed {
+  transform: rotate(-90deg);
+}
+
+/* Animación del colapso: grid-template-rows 1fr -> 0fr en vez de max-height a mano
+   (que necesita un valor fijo) — funciona con contenido de alto variable sin JS. El
+   div interior necesita overflow:hidden para que el contenido no se vea mientras se
+   encoge a 0fr. */
+.collapseWrap {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.25s ease;
+}
+
+.collapseWrapClosed {
+  grid-template-rows: 0fr;
+}
+
+.collapseInner {
+  overflow: hidden;
+  min-height: 0;
 }
 
 .versionPicker {
@@ -335,11 +426,11 @@
 .versionCover {
   cursor: pointer;
   position: relative;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 5rem;
+  height: 5rem;
   padding: 0;
   border: 2px solid var(--line);
-  border-radius: 0.4rem;
+  border-radius: 0.5rem;
   overflow: hidden;
   background: var(--chassis-900);
   transition: border-color 0.15s ease, transform 0.15s ease;
@@ -363,10 +454,10 @@
   background: var(--chassis-900);
   color: var(--text-h);
   font-family: var(--font-mono);
-  font-size: 0.55rem;
+  font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.02em;
-  padding: 0.05rem 0.2rem;
+  padding: 0.08rem 0.28rem;
   border-radius: 0.25rem 0 0 0;
 }
 
@@ -403,18 +494,17 @@
   align-items: center;
   gap: 0.85rem;
   padding: 0.75rem 1.1rem;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(0, 0, 0, 0.2);
   border-radius: 0.7rem;
   text-decoration: none;
-  color: var(--text-h);
-  background: var(--chassis-900);
+  color: #fff;
   box-shadow: 0 10px 24px -18px rgba(0, 0, 0, 0.4);
-  transition: border-color 0.15s ease, transform 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .evoCard:hover {
-  border-color: var(--signal);
   transform: translateY(-2px);
+  box-shadow: 0 10px 24px -8px rgba(0, 0, 0, 0.4);
 }
 
 .evoSprite {
@@ -425,7 +515,7 @@
 .evoNumber {
   display: block;
   font-family: var(--font-mono);
-  opacity: 0.7;
+  opacity: 0.85;
   font-size: 0.8rem;
 }
 
@@ -471,29 +561,29 @@
 .statBars {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
-  min-width: 16rem;
+  gap: 0.85rem;
+  min-width: 20rem;
   flex: 1;
-  max-width: 26rem;
+  max-width: 32rem;
 }
 
 .statBarRow {
   display: grid;
-  grid-template-columns: 4.2rem 1fr 2.5rem;
+  grid-template-columns: 5rem 1fr 3rem;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.75rem;
 }
 
 .statBarLabel {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   color: var(--text);
   opacity: 0.8;
 }
 
 .statBarTrack {
-  height: 0.5rem;
-  border-radius: 0.2rem;
+  height: 0.85rem;
+  border-radius: 0.3rem;
   background: var(--chassis-800);
   border: 1px solid var(--line);
   overflow: hidden;
@@ -501,12 +591,15 @@
 
 .statBarFill {
   height: 100%;
-  border-radius: 0.2rem 0 0 0.2rem;
+  border-radius: 0.3rem 0 0 0.3rem;
+  /* Crece desde 0 al montar en vez de aparecer ya llena (ver statsAnimated en
+     PokemonFichaPage.jsx) — pedido explícito de David. */
+  transition: width 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .statBarValue {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: 0.92rem;
   color: var(--text-h);
   font-weight: 600;
   text-align: right;
@@ -572,32 +665,90 @@
   width: auto;
 }
 
-.moveStats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.9rem;
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  opacity: 0.9;
+/* Tabla de movimientos (antes cuadrícula de cards de alto irregular — ver
+   .claude/memory/project_pokewebmax_progress.md, decisión discutida con David) —
+   filas de altura uniforme por naturaleza, ordenables por columna. */
+.moveTableWrap {
+  overflow-x: auto;
 }
 
-.clickableCard {
+.moveTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.moveTable th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 2px solid var(--line);
+  white-space: nowrap;
+}
+
+.moveSortButton {
   cursor: pointer;
-  transition: border-color 0.15s ease;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
 }
 
-.clickableCard:hover,
-.clickableCard:focus-visible {
-  border-color: var(--signal);
+.moveSortButton:hover {
+  color: var(--text-h);
+}
+
+.moveTable td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.moveLevelCell {
+  font-family: var(--font-mono);
+  color: var(--text);
+  opacity: 0.85;
+}
+
+.moveClassCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.moveRowClickable {
+  cursor: pointer;
+}
+
+.moveRowClickable:hover,
+.moveRowClickable:focus-visible {
+  background: var(--chassis-800);
   outline: none;
 }
 
+/* Sin padding/border propio en la celda — el .collapseInner de dentro los pone, así
+   que al colapsar a 0fr no queda ni una tira de 1px visible (ver .moveTable td, que
+   por defecto sí tiene ambos). */
+.moveTable td.moveDescriptionCell {
+  padding: 0;
+  border-bottom: none;
+}
+
+.moveDescriptionCell .collapseInner {
+  padding: 0 0.75rem;
+}
+
 .moveDescription {
-  margin: 0.6rem 0 0;
-  padding-top: 0.6rem;
-  border-top: 1px solid var(--line);
+  margin: 0;
+  padding: 0.55rem 0;
   font-size: 0.85rem;
   color: var(--text);
+  background: var(--chassis-950);
 }
 
 .moveDescription .tag {

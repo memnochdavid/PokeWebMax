@@ -184,6 +184,50 @@ def resolve_variant_template(value, variant="es"):
     return espana if variant == "es" else hispanoamerica
 
 
+_VARIANT_TEMPLATE_NAME_RE = re.compile(r"^[Nn]ombreHaEs$|^[Nn]$")
+
+
+def resolve_inline_variants(text, variant="es"):
+    """Como resolve_variant_template, pero para plantillas de variante EMBEBIDAS dentro
+    de una prosa más larga en vez de ser el valor completo — caso de las páginas de
+    habilidad/movimiento ('Efecto': 'Reduce el ataque con {{N|Tacleada|Placaje}}...'),
+    a diferencia de {{Pokédex}} donde el valor entero de cada clave ES la plantilla.
+    Todas las apariciones se resuelven, no solo la primera."""
+    result = []
+    i = 0
+    n = len(text)
+    while i < n:
+        if text[i : i + 2] == "{{":
+            name_match = re.match(r"\{\{([A-Za-z]+)\|", text[i:])
+            if name_match and _VARIANT_TEMPLATE_NAME_RE.match(name_match.group(1)):
+                depth = 0
+                j = i
+                while j < n - 1:
+                    two = text[j : j + 2]
+                    if two == "{{":
+                        depth += 1
+                        j += 2
+                        continue
+                    if two == "}}":
+                        depth -= 1
+                        j += 2
+                        if depth == 0:
+                            break
+                        continue
+                    j += 1
+                inner_start = i + 2 + len(name_match.group(1)) + 1
+                params = split_top_level(text[inner_start : j - 2], "|")
+                if len(params) == 2:
+                    result.append(params[1] if variant == "es" else params[0])
+                else:
+                    result.append(text[i:j])
+                i = j
+                continue
+        result.append(text[i])
+        i += 1
+    return "".join(result)
+
+
 def resolve_alias(key, fields, seen=None):
     """Valor de `key`, resolviendo alias (el valor es literalmente el nombre de otra
     clave del mismo bloque, p.ej. 'zafiro = rubí') de forma recursiva. Protegido contra
@@ -204,6 +248,7 @@ def resolve_alias(key, fields, seen=None):
 
 _REF_RE = re.compile(r"<ref[^>]*>.*?</ref>", re.DOTALL | re.IGNORECASE)
 _REF_SELFCLOSE_RE = re.compile(r"<ref[^>]*/>", re.IGNORECASE)
+_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 _BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
 _BOLD_RE = re.compile(r"'''(.*?)'''")
 _ITALIC_RE = re.compile(r"''(.*?)''")
@@ -232,6 +277,7 @@ def clean_wikitext(text, collapse_newlines=True):
     (listas de Localización); con True (por defecto, flavor text) los convierte en
     espacio, igual que hace el frontend con el texto de PokeAPI
     (frontend/src/utils/pokemonFicha.js:56)."""
+    text = _HTML_COMMENT_RE.sub("", text)
     text = _REF_RE.sub("", text)
     text = _REF_SELFCLOSE_RE.sub("", text)
     text = _BR_RE.sub("\n" if not collapse_newlines else " ", text)
@@ -388,6 +434,90 @@ def parse_localizacion(wikitext, variant="es"):
         if cleaned:
             result[key] = cleaned
     return result
+
+
+# --- Habilidades y movimientos: bloque == Efecto == ---------------------------------------
+#
+# Formato de página TOTALMENTE distinto al de especies: no es una plantilla clave=valor,
+# es una sección de wikitexto normal con encabezados. Dos formas vistas:
+#   1. Prosa simple (habilidades sin cambios entre generaciones, ej. 'Espesura'):
+#      == Efecto ==
+#      Espesura aumenta la potencia de los movimientos...
+#   2. Desglose por generación (habilidades/movimientos que cambiaron con el tiempo,
+#      ej. 'Intimidación', 'Tacleada/Placaje'):
+#      == Efecto ==
+#      === En combate ===
+#      ;Tercera generación
+#      :Intimidación reduce en un nivel...
+#      ;Desde cuarta a sexta generación
+#      :La habilidad Intimidación ahora también...
+# En el caso 2 se usa la ÚLTIMA entrada ':texto' (la más reciente, incluso aunque esté
+# redactada como delta de la anterior — mismo criterio de "quedarse con la versión
+# actual" que moveLevelLearned/pokedex_by_pokeapi_version en el resto del proyecto).
+
+_SECOND_LEVEL_HEADING_RE = re.compile(r"\n==[^=]")
+# {3,} (no exactamente 3) para que también corte en subsecciones de nivel 4 como
+# "==== Glitches ====" — antes solo se detectaba nivel 3 exacto y ese tipo de bloque se
+# colaba entero en el texto (visto en 'Cadena de mordiscos', 'Tambor'...).
+_THIRD_LEVEL_HEADING_RE = re.compile(r"\n={3,}[^=]")
+_DEFLIST_TEXT_RE = re.compile(r"^:(.+)$", re.MULTILINE)
+
+
+def _heading_section(wikitext, heading, boundary_re):
+    """Texto entre '== heading ==' (o '=== heading ===' si `heading` ya trae los
+    signos) y el siguiente encabezado del mismo nivel o superior."""
+    start = wikitext.find(heading)
+    if start == -1:
+        return None
+    start += len(heading)
+    m = boundary_re.search(wikitext, start)
+    end = m.start() if m else len(wikitext)
+    return wikitext[start:end]
+
+
+def parse_effect(wikitext, variant="es"):
+    """Bloque == Efecto == de una página de habilidad o movimiento -> texto plano
+    representativo, o None si la página no tiene esa sección (no es una página de
+    habilidad/movimiento, o el título no coincidía con nada real — ver
+    effect_title_candidates)."""
+    section = _heading_section(wikitext, "== Efecto ==", _SECOND_LEVEL_HEADING_RE)
+    if section is None:
+        return None
+
+    combat = _heading_section(section, "=== En combate ===", _THIRD_LEVEL_HEADING_RE)
+    if combat is not None:
+        body = combat
+    else:
+        # Sin desglose "En combate": cortar en la primera subsección que sea (ej.
+        # "=== En otros videojuegos ===", "=== Movimiento Z ===") en vez de tragarse
+        # toda la sección "Efecto" — solo interesa el párrafo introductorio.
+        m = _THIRD_LEVEL_HEADING_RE.search(section)
+        body = section[: m.start()] if m else section
+
+    entries = _DEFLIST_TEXT_RE.findall(body)
+    raw = entries[-1] if entries else body
+
+    raw = resolve_inline_variants(raw, variant=variant)
+    cleaned = clean_wikitext(raw)
+    return cleaned or None
+
+
+def effect_title_candidates(es_name, es419_name):
+    """Títulos de página posibles para una habilidad/movimiento dado su nombre en
+    España y en Hispanoamérica (`names[es]`/`names[es-419]` de PokeAPI). Cuando
+    difieren, WikiDex titula la página como 'Hispanoamérica/España' (ej.
+    'Tacleada/Placaje' para Tackle: es-419='Tacleada', es='Placaje') — verificado con
+    varios casos reales, mismo orden Ha-antes-que-Es que {{NombreHaEs}}. Cuando
+    coinciden (la mayoría), es solo el nombre. Devuelve una lista para probar en
+    orden, no un único título."""
+    candidates = []
+    if es_name:
+        candidates.append(es_name)
+    if es419_name and es419_name != es_name:
+        candidates.append(es419_name)
+        candidates.append(f"{es419_name}/{es_name}")
+        candidates.append(f"{es_name}/{es419_name}")
+    return candidates
 
 
 # --- CLI de prueba manual ------------------------------------------------------------------

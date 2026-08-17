@@ -1,15 +1,13 @@
 import { useMemo, useState } from 'react'
+import { compareValues } from '../utils/sorting.js'
 
 // Catálogo interno indexado por clave (mismo criterio que TOGGLES en PokemonFilters) —
-// `value(entry, names, language)` es lo que se compara; null se manda siempre al final
-// (Pokémon sin ese dato cacheado, ej. weight/statsTotal sin `pokemon` cacheado) en vez
-// de ordenar como si fuera 0, que engañaría ("el más ligero" no debería ser "el que no
-// sabemos su peso").
+// `value(entry, names, language)` es lo que se compara.
 export const SORTS = {
   number: { labelKey: 'filters.sortNumber', value: (entry) => entry.id },
   name: {
     labelKey: 'filters.sortName',
-    value: (entry, names, language) => names[entry.id]?.[language] ?? entry.name,
+    value: (entry, names, language) => names[entry.id]?.names[language] ?? entry.name,
   },
   type: { labelKey: 'filters.sortType', value: (entry) => entry.types[0] ?? '' },
   height: { labelKey: 'filters.sortHeight', value: (entry) => entry.height },
@@ -20,16 +18,7 @@ export const SORTS = {
 
 function compareBy(sortKey, direction, names, language) {
   const { value } = SORTS[sortKey]
-  const dir = direction === 'desc' ? -1 : 1
-  return (a, b) => {
-    const va = value(a, names, language)
-    const vb = value(b, names, language)
-    if (va == null && vb == null) return 0
-    if (va == null) return 1 // sin dato siempre al final, en cualquier dirección
-    if (vb == null) return -1
-    if (typeof va === 'string') return dir * va.localeCompare(vb)
-    return dir * (va - vb)
-  }
+  return (a, b) => compareValues(value(a, names, language), value(b, names, language), direction)
 }
 
 const EMPTY_FILTERS = {
@@ -99,7 +88,7 @@ export default function usePokemonBrowser(pokemonList, { names = {}, language = 
 
   const visible = useMemo(() => {
     const base = filtering
-      ? pokemonList.filter((entry) => matchesFilters(entry, filters, names[entry.id]?.[language]))
+      ? pokemonList.filter((entry) => matchesFilters(entry, filters, names[entry.id]?.names[language]))
       : pokemonList.filter((entry) => entry.generation === activeGeneration)
     return [...base].sort(compareBy(sortKey, sortDirection, names, language))
   }, [pokemonList, filters, filtering, activeGeneration, names, language, sortKey, sortDirection])

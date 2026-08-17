@@ -870,6 +870,186 @@ verificado a ojo en navegador** (sin `claude-in-chrome` esta sesión tampoco) �
 scroll-to-ancla, el offset de las barras fijas y el scrollspy son la parte más
 sensible a probar visualmente antes de darlo por bueno del todo.
 
+## Diez retoques más de la ficha (tras el rediseño sin pestañas) — HECHO 2026-08-17
+
+David dio otra lista tras probar el rediseño de la sesión anterior. La captura que
+adjuntó (`a.png`) resultó ser la MISMA del mensaje anterior (Mewtwo, layout viejo, sin
+Evolución visible) — no servía para diagnosticar el punto de las evoluciones
+descuadradas, así que ese se resolvió leyendo el JSX/CSS directamente, no a ojo.
+
+1. **Tabla de movimientos ordenable** (nivel/tipo/clase) — sustituye la cuadrícula de
+   cards. **Decisión discutida y confirmada por David** (prefirió la tabla sobre
+   forzar alturas iguales en las cards, ver [[feedback_no_silent_data_collapsing]] para
+   el patrón de cómo se le consulta este tipo de decisión). Nueva
+   `moveLevelLearned(pokemonMoves, moveName)` en `utils/pokemonFicha.js`: 100%
+   frontend, `pokemon.moves[].version_group_details[]` ya trae `level_learned_at` +
+   `move_learn_method` por version_group, no hizo falta tocar el backend. Se usa el
+   version_group con el id más alto (el más reciente) con method 'level-up'; null si
+   nunca se aprende por nivel (MT/cría/tutor) — ordena al final, no como si fuera 0.
+   Extraído `compareValues()` a `utils/sorting.js` (antes duplicado en
+   `usePokemonBrowser`, ahora compartido con la tabla de movimientos). Cabeceras
+   clicables alternan asc/desc; la descripción se despliega como fila `colSpan`, no
+   cambia el alto de la fila del movimiento.
+2. **"Movimientos sin traducir"**: verificado con SQL directo que los 937/937 nombres
+   de movimiento SÍ están en español (0 coincidencias es===en en un muestreo real de
+   131 movimientos de Charizard) — no hay bug ahí. Lo que David ve es casi seguro el
+   tag "EN" ya existente en la descripción (111/937 movimientos sin flavor_text en
+   español en PokeAPI, límite real de los datos) — se mantiene visible en la tabla
+   nueva, no se oculta (ver [[feedback_no_silent_data_collapsing]]).
+3. **Secciones colapsables y animadas**: cada `<h2>` de sección es ahora un botón
+   (`SectionHeading`) que colapsa/expande con el truco de
+   `grid-template-rows: 1fr → 0fr` (`.collapseWrap`/`.collapseInner` en el CSS) — anima
+   con contenido de alto variable sin JS ni max-height a mano. Estado
+   `collapsedSections` (Set), todas expandidas por defecto.
+4. **Breadcrumb sticky**: `.backLink` ahora `position: sticky` bajo el nav de la app.
+5. **Carátulas más grandes**: `.versionCover` 2.75rem → 5rem (las imágenes ya vienen a
+   220×220, de sobra de resolución).
+6. **Evoluciones descuadradas — bug real encontrado por inspección de código** (no
+   por la captura, que no la mostraba): el wrapper `<div>` de cada etapa (conector +
+   card) no tenía `display:flex`, así que conector y card se apilaban VERTICALMENTE
+   como bloques en vez de ir en fila — con `flex-wrap` en el contenedor padre eso
+   producía el descuadre. Arreglado quitando el wrapper y usando `<Fragment>` con
+   conector y card como hijos DIRECTOS de `.evoList` (ya flex). De paso, **colores de
+   tipo en las evo-cards** (no los tenían): `/api/pokemon/names` amplió su forma de
+   `{id: {es,en}}` a `{id: {names:{es,en}, types:[...]}}` (nuevo
+   `findPokemonTypesById()` ya existente, reutilizado — no fue una consulta nueva) y
+   los 2 consumidores (`PokemonListPage`, `usePokemonBrowser`) se adaptaron al shape
+   nuevo. Verificado con datos reales: Charizard recupera su segundo tipo (`flying`)
+   en la card de evolución, que antes se mostraba gris genérico.
+7. **Espacio entre sticky bars y navbar**: antes quedaban pegadas (`top` sin margen);
+   ahora `.backLink` en `top: 4.2rem` y `.tabs` en `top: 6.9rem`, con hueco visible
+   entre las tres barras (nav app → breadcrumb → anclas). `scroll-margin-top` de las
+   secciones y el `rootMargin` del scrollspy ajustados a juego (9.7rem / -175px).
+8. **Cards de movimiento con alturas distintas**: resuelto de raíz por el punto 1 (la
+   tabla tiene filas de alto uniforme por naturaleza).
+9. **Espacio vacío en los laterales** (mismo punto que "reducir espacio libre a los
+   lados", pedido dos veces): `.page` max-width 1520px → 1900px, padding horizontal
+   2rem → 1.25rem.
+10. **Animación de las barras/gráfica de Stats + más tamaño**: `StatRadarChart` gana
+    prop `animate` (arranca a `scale(0.35)`+opacity 0, crece a escala 1 con
+    `cubic-bezier` de rebote) y `SIZE` 240→300px; `.statBarFill` anima su `width` con
+    la misma transición, arrancando en 0% (estado `statsAnimated`, activado un
+    `requestAnimationFrame` después del montaje, reiniciado al cambiar de Pokémon vía
+    `idOrName` en las deps). `.statBars`/`.statBarTrack`/fuentes agrandados a juego.
+
+**Verificado:** `vite build` de producción compiló limpio en cada paso. Con datos
+reales (no simulados): orden por nivel de Charizard pone nivel 0 antes que nivel 1 y
+manda los null (MT/tutor) al final; orden por tipo alfabético correcto; cadena
+evolutiva Charmander→Charmeleon→Charizard recupera tipos reales por etapa
+(`['fire']`, `['fire']`, `['fire','flying']`). **No verificado a ojo en navegador**
+(sin `claude-in-chrome` en toda la sesión) — la animación de las barras/radar, el
+colapso animado de secciones y el espaciado sticky son la parte más sensible a
+confirmar visualmente.
+
+## Ronda de retoques 3 de la ficha — parcialmente hecho 2026-08-17
+
+David pidió 6 cosas más; 4 hechas, 2 pendientes de su decisión (investigadas a fondo,
+no implementadas a ciegas):
+
+**Hecho:**
+- Tabla de movimientos: TODAS las columnas ordenables ahora (antes solo nivel/nombre/
+  tipo/clase, faltaban Pot./PP/Prec. — añadidas a `MOVE_SORTS`, con `null` para
+  movimientos no cacheados igual que el resto).
+- Despliegue de descripción de movimiento animado: mismo truco de `grid-template-rows`
+  que las secciones, pero dentro de un `<td>` (una fila `<tr>` no soporta
+  `display:grid` bien) — la fila de descripción ahora se renderiza siempre (oculta a
+  0fr) en vez de montar/desmontar.
+- Breadcrumb + barra de anclas **fusionados en una sola barra sticky** (antes dos
+  barras apiladas con demasiado hueco, y el breadcrumb "no quedaba bien" — pedido
+  explícito de rediseño). `top: 4.1rem` (antes 4.2rem+6.9rem en dos barras separadas),
+  breadcrumb como primer elemento dentro de `.tabs` con un separador vertical.
+- Hero más grande (`heroBands` 22rem→27rem, `scanChamber` 17rem→21rem, columna lateral
+  380px→420px) + **botón macho/hembra**: usa los sprites `_hembra.webm` que YA
+  estaban en `public/animated/` (confirmado: 99 archivos, cubren especies con
+  dimorfismo visual real como Meowstic/Pyroar/Frillish/Indeedee/Basculegion — no solo
+  variedades PokeAPI tipo `pikachu-f`). Nuevo hook `useFemaleSpriteAvailable` con
+  comprobación HEAD. **Bug real encontrado y corregido**: el servidor de dev de Vite
+  devuelve 200 + `index.html` (fallback de SPA) para CUALQUIER ruta que no existe,
+  así que `res.ok` no distinguía "existe" de "no existe" — verificado con curl
+  (`bulbasaur_hembra.webm`, que no existe, daba 200 `text/html`). Arreglado
+  comprobando `content-type` empieza por `video/`, no solo el status HTTP. Verificado
+  con curl real: `meowstic_hembra.webm` → `video/webm` (sí), `bulbasaur_hembra.webm`
+  → `text/html` (no).
+
+**Investigado, pendiente de decisión de David — NO implementado a ciegas:**
+- **Botones de cry y shiny**: David marcó "existen los .webm" como una afirmación a
+  comprobar. **Es falsa tal cual la planteó**: no hay ningún `.webm` de shiny en
+  ningún sitio (ni en `Pokedex_API` ni en `PokeWebMax`). Lo que SÍ existe en
+  `Pokedex_API/app/src/main/res/raw/`: 1424 sprites shiny animados en formato
+  **`.webp`** (no `.webm`) — formato distinto, y probablemente MÁS simple de
+  renderizar (WebP animado soporta canal alfa nativo, no haría falta el hack de
+  chroma-key por canvas que usa `useChromaKeyVideo` para los `.webm` actuales). Cry:
+  **no existe ningún archivo de audio** en `Pokedex_API` (solo `cry_logo.png`, un
+  icono de UI, no el sonido) — habría que sacarlo de la propia PokeAPI
+  (`pokemon.cries.latest`, URL externa) o de otra fuente, no hay nada que copiar.
+  Pendiente: decidir si (a) se copian los 1424 `.webp` shiny y se cachea/sirve el
+  cry desde PokeAPI, y (b) confirmar que el botón de shiny usa `<img>` normal en vez
+  del pipeline de canvas+chroma-key.
+## Fallback de WikiDex a "paridad total" (habilidades/movimientos) — HECHO 2026-08-17
+
+David pidió que el fallback de WikiDex no fuera solo para descripciones de especie,
+sino para cualquier info que hoy cae a inglés. Primera medición (por cruce de nombre
+exacto, sin el patrón de título compuesto) dio 68%/70% de cobertura en habilidades/
+movimientos — **David dudó de ese número explícitamente** ("¿seguro que no se ha
+incluido...? puede que no te haya entendido") y tenía razón: el fallo era metodológico,
+no del dump.
+
+**El bug real**: WikiDex titula las páginas de movimiento/habilidad como
+`Hispanoamérica/España` cuando el nombre difiere entre regiones (ej. `Tacleada/Placaje`
+para Tackle: es-419='Tacleada', es='Placaje'; `Atactrueno/Rayo` para Thunderbolt) — el
+mismo criterio Ha-antes-que-Es que `{{NombreHaEs}}`, pero en el TÍTULO de la página, no
+solo dentro del wikitext. Comprobando también `es-419` y el título compuesto, la
+cobertura real salta a **911/937 movimientos (97%) y 290/373 habilidades (78%)**.
+Cobertura INCREMENTAL real (lo que de verdad importa — cuántas de las que HOY están en
+inglés se arreglan): **93 de 111 movimientos sin ES en PokeAPI, y 40 de 106 habilidades
+sin ES en PokeAPI** — movimientos pasan de 88%→98% en español, habilidades de 72%→82%.
+
+**Implementado** (mismo patrón arquitectónico que el fallback de descripción de
+especie — Python extrae, PHP cruza y escribe):
+- `scripts/wikidex_parser.py`: `parse_effect()` (bloque `== Efecto ==`, formato TOTALMENTE
+  distinto al `{{Pokédex}}` de especies — no es plantilla clave=valor, es wikitexto con
+  encabezados; cuando hay desglose `=== En combate ===` por generación se usa la ÚLTIMA
+  entrada `:texto`, la más reciente, aunque esté redactada como delta de la anterior
+  — ej. "La potencia de Placaje se reduce a 40" — mismo criterio de "quedarse con lo
+  actual" que el resto del proyecto), `resolve_inline_variants()` (variantes
+  `{{NombreHaEs}}`/`{{N}}`/`{{n}}` EMBEBIDAS en prosa, no solo cuando son el valor
+  completo — necesario porque aquí aparecen varias veces dentro del mismo párrafo),
+  `effect_title_candidates()` (los 4 títulos posibles a probar).
+  - **Dos bugs de límite de sección encontrados y corregidos durante la validación**
+    (mismo patrón de "valida contra el dump completo antes de dar por bueno" que ya
+    dio resultado la vez anterior): headings de nivel 4 (`==== Glitches ====`) no se
+    detectaban como límite y se colaban enteros en el texto; comentarios HTML
+    (`<!--...-->`) no se limpiaban. Verificado tras el fix: 1091/1092 entradas sin
+    ningún resto de markup (99,9%), el único caso restante es un `<!--` sin cerrar en
+    el wikitext FUENTE (typo real de WikiDex, no del parser).
+  - `scripts/wikidex_export_effects.py`: exporta TODAS las páginas con `== Efecto ==`
+    (2621, no solo habilidades/movimientos — ítems, bayas, cartas TCG también lo usan)
+    a `backend/var/wikidex_import/effects.json`. Deliberadamente sin filtrar por tipo
+    de página en Python — el comando de importación en PHP es quien sabe qué nombres
+    busca (mismo reparto de responsabilidades que el resto del pipeline WikiDex).
+- Backend: entidad `WikidexEffectText` (`resourceType` 'ability'|'move' + `resourceId`,
+  no dos tablas separadas), `WikidexEffectTextRepository`, comando
+  `app:wikidex:import-effects` (cruza por `PokeApiResourceCacheRepository::
+  findLocalizedNamesByType()`, nuevo método generalizado de la que antes solo servía
+  para species). Migración aplicada, comando ejecutado: 1091 filas reales en BD.
+  `PokemonFichaAssembler` expone `wikidexEffectText: {ability: {id: texto}, move: {id:
+  texto}}`, filtrado a solo las habilidades/movimientos de ESE Pokémon (no las ~1100
+  importadas enteras en cada respuesta).
+- Frontend: `latestVersionedText()` en `utils/pokemonFicha.js` gana un cuarto parámetro
+  `wikidexText` (mismo patrón que `wikidexFlavorText` en `flavorTextsByVersion`) —
+  tercer nivel de fallback tras PokeAPI-ES/PokeAPI-EN, cuenta como `translated: true`.
+  Conectado en las dos llamadas de `PokemonFichaPage.jsx` (habilidades y movimientos).
+
+**Verificado con datos reales de extremo a extremo** (no simulado): la habilidad
+"Disemillar" (seed-sower) de Arboliva pasa de `translated: false` (inglés, sin dato en
+PokeAPI) a `translated: true` con texto real de WikiDex, a través del pipeline completo
+(BD → PokemonFichaAssembler → latestVersionedText → UI). `vite build` compiló limpio.
+
+**Pendiente (mencionado, no bloqueante)**: David tiene shiny en `.webm` funcionando en
+su Dexter local — contradice lo encontrado en `Pokedex_API` (que solo tiene `.webp`).
+Lo dejó como pendiente para buscarlo él mismo; cry también pendiente (sin fuente de
+audio confirmada todavía).
+
 ## Pendiente / siguiente paso natural
 
 - No hay vistas de listado/detalle navegable para ningún recurso salvo Pokémon — el resto

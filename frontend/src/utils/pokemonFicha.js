@@ -91,8 +91,20 @@ export function flavorTextsByVersion(species, language, wikidexFlavorText = {}) 
 // Se queda con la ÚLTIMA entrada que matchea en vez de la primera: el array viene en
 // orden cronológico ascendente por version_group y el texto cambia de redacción entre
 // generaciones — la última es la más moderna.
-export function latestVersionedText(entries, language, textKey = 'flavor_text') {
-  if (!Array.isArray(entries) || entries.length === 0) return { text: null, translated: false }
+//
+// `wikidexText` (viene de ficha.wikidexEffectText.{ability,move}, ver
+// PokemonFichaAssembler) es el tercer nivel de fallback para lo que ni siquiera
+// PokeAPI trae en español — el "== Efecto ==" de la página de WikiDex de esa
+// habilidad/movimiento, importado offline (ver
+// .claude/memory/project_pokewebmax_progress.md, "paridad total"). Mismo criterio que
+// wikidexFlavorText en flavorTextsByVersion: cuenta como `translated: true` porque
+// realmente es texto en español, solo que de otra fuente.
+export function latestVersionedText(entries, language, textKey = 'flavor_text', wikidexText = null) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return wikidexText && language === 'es'
+      ? { text: wikidexText, translated: true }
+      : { text: null, translated: false }
+  }
 
   let matched
   let fallbackEn
@@ -102,8 +114,12 @@ export function latestVersionedText(entries, language, textKey = 'flavor_text') 
     else if (lang === 'en') fallbackEn = entry[textKey]
   }
 
-  const translated = matched !== undefined
-  const raw = translated ? matched : fallbackEn
+  let translated = matched !== undefined
+  let raw = translated ? matched : fallbackEn
+  if (!translated && language === 'es' && wikidexText) {
+    raw = wikidexText
+    translated = true
+  }
   return { text: raw?.replace(/[\n\f]/g, ' ') ?? null, translated }
 }
 
@@ -138,6 +154,29 @@ export function generationNumber(species) {
 function idFromUrl(url) {
   const segments = url.split('/').filter(Boolean)
   return Number(segments[segments.length - 1])
+}
+
+// Nivel en el que se aprende un movimiento por subida de nivel, a partir de
+// `pokemon.moves` (ya viene completo en la ficha — el payload de `pokemon` no se
+// recorta, no hace falta tocar el backend para esto). Un movimiento puede aparecer con
+// method 'level-up' en varios version_group con niveles distintos entre generaciones
+// (ver Bulbasaur: 'tackle' es nivel 1 en rojo/azul); se usa el version_group con el id
+// más alto (el más reciente, los ids de PokeAPI son cronológicos) como "el nivel
+// actual". null si el movimiento nunca se aprende por nivel (solo MT/cría/tutor) —
+// se ordena al final de la tabla, no como si fuera nivel 0.
+export function moveLevelLearned(pokemonMoves, moveName) {
+  const entry = pokemonMoves?.find((m) => m.move.name === moveName)
+  if (!entry) return null
+
+  let best = null
+  for (const vgd of entry.version_group_details) {
+    if (vgd.move_learn_method.name !== 'level-up') continue
+    const versionGroupId = idFromUrl(vgd.version_group.url)
+    if (best === null || versionGroupId > best.versionGroupId) {
+      best = { versionGroupId, level: vgd.level_learned_at }
+    }
+  }
+  return best?.level ?? null
 }
 
 // `t` es el i18next `t()` de react-i18next (ver PokemonFichaPage.jsx) — prosa de

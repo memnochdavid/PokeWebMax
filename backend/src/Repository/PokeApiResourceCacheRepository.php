@@ -88,10 +88,24 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
      */
     public function findSpeciesLocalizedNames(array $languages): array
     {
+        return $this->findLocalizedNamesByType('pokemon-species', $languages);
+    }
+
+    /**
+     * Igual que findSpeciesLocalizedNames pero para cualquier resourceType con campo
+     * `names` (ability, move...) — usado por el comando de importación de WikiDex para
+     * cruzar por nombre 'es'/'es-419' (ver WikidexImportEffectsCommand).
+     *
+     * @param string[] $languages
+     * @return array<int, array<string, string>> nombre por idioma, indexado por resourceId
+     */
+    public function findLocalizedNamesByType(string $resourceType, array $languages): array
+    {
         $rows = $this->getEntityManager()->getConnection()->executeQuery(
             "SELECT resource_id, JSON_EXTRACT(payload, '$.names') AS names_json
              FROM pokeapi_resource_cache
-             WHERE resource_type = 'pokemon-species'"
+             WHERE resource_type = :type",
+            ['type' => $resourceType],
         )->fetchAllAssociative();
 
         $result = [];

@@ -29,15 +29,23 @@ class PokemonListService
     }
 
     /**
-     * Nombre de cada especie cacheada en cada idioma soportado — para sitios que
-     * necesitan el nombre localizado sin cargar la especie completa (lista de
-     * Pokémon, nombres de la cadena evolutiva en la ficha).
+     * Nombre (en cada idioma soportado) y tipos de cada especie cacheada — para sitios
+     * que necesitan esto sin cargar el Pokémon completo (lista de Pokémon, nombres +
+     * colores de tipo de la cadena evolutiva en la ficha).
      *
-     * @return array<int, array<string, string>>
+     * @return array<int, array{names: array<string, string>, types: string[]}>
      */
     public function namesById(): array
     {
-        return $this->repository->findSpeciesLocalizedNames(self::SUPPORTED_LANGUAGES);
+        $names = $this->repository->findSpeciesLocalizedNames(self::SUPPORTED_LANGUAGES);
+        $typesById = $this->repository->findPokemonTypesById();
+
+        $result = [];
+        foreach ($names as $id => $localized) {
+            $result[$id] = ['names' => $localized, 'types' => $typesById[$id] ?? []];
+        }
+
+        return $result;
     }
 
     /**

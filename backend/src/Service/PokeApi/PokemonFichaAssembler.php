@@ -4,6 +4,7 @@ namespace App\Service\PokeApi;
 
 use App\Entity\PokeApiResourceCache;
 use App\Repository\PokeApiResourceCacheRepository;
+use App\Repository\WikidexEffectTextRepository;
 use App\Repository\WikidexFlavorTextRepository;
 
 class PokemonFichaAssembler
@@ -11,6 +12,7 @@ class PokemonFichaAssembler
     public function __construct(
         private readonly PokeApiResourceCacheRepository $repository,
         private readonly WikidexFlavorTextRepository $wikidexFlavorTextRepository,
+        private readonly WikidexEffectTextRepository $wikidexEffectTextRepository,
     ) {
     }
 
@@ -55,6 +57,13 @@ class PokemonFichaAssembler
             'wikidexFlavorText' => $species !== null
                 ? $this->wikidexFlavorTextRepository->findTextsBySpeciesId($species->getResourceId())
                 : [],
+            // Mismo fallback pero para el "== Efecto ==" de habilidades/movimientos
+            // (ver .claude/memory/project_pokewebmax_progress.md, "paridad total") —
+            // solo las de este Pokémon en concreto, no las ~1100 importadas enteras.
+            'wikidexEffectText' => [
+                'ability' => $this->filterByIds($this->wikidexEffectTextRepository->findTextsByType('ability'), $abilities),
+                'move' => $this->filterByIds($this->wikidexEffectTextRepository->findTextsByType('move'), $moves),
+            ],
             'missing' => [
                 'species' => $species === null,
                 'evolutionChain' => $evolutionChain === null,
@@ -96,5 +105,17 @@ class PokemonFichaAssembler
     private function countMissing(array $resolvedMany): int
     {
         return count(array_filter($resolvedMany, static fn (array $entry) => !$entry['cached']));
+    }
+
+    /**
+     * @param array<int, string> $textById
+     * @param array<int, array{id: int}> $resolvedMany
+     * @return array<int, string>
+     */
+    private function filterByIds(array $textById, array $resolvedMany): array
+    {
+        $ids = array_column($resolvedMany, 'id');
+
+        return array_intersect_key($textById, array_flip($ids));
     }
 }
