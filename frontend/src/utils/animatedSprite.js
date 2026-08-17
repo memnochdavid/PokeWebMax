@@ -215,6 +215,18 @@ const NAME_OVERRIDES = {
   'terapagos-stellar': 'terapagos_teracristal',
   'terapagos-terastal': 'terapagos_teracristal',
   unown: 'unown_a',
+  // Las 28 formas de Unown (letras A-Z + !/?) son `pokemon-form` de un único `pokemon`
+  // (no `species.varieties`, mismo caso que Alcremie, ver más abajo) — el selector de
+  // decoración las referencia por su `pokemon.forms[].name`. La mayoría de letras
+  // sueltas ('unown-b', 'unown-c'...) ya encajan en el switch por defecto de abajo
+  // (`unown_b`, `unown_c`...); estas cuatro necesitan override: exclamación/pregunta
+  // porque el pack usa nombre en español, y las letras F/M porque colisionan con los
+  // casos 'f'/'m' del switch (pensados para sufijos de género tipo 'pikachu-f', no
+  // para letras de Unown).
+  'unown-exclamation': 'unown_exclamacion',
+  'unown-question': 'unown_pregunta',
+  'unown-f': 'unown_f',
+  'unown-m': 'unown_m',
   'ursaluna-bloodmoon': 'ursaluna_luna_carmesi',
   'urshifu-rapid-strike': 'urshifu_fluido',
   'urshifu-single-strike': 'urshifu_brusco',
@@ -241,6 +253,178 @@ const NAME_OVERRIDES = {
   // pack (ni "mega_x" ni "x_z") — se deja caer al icono estático, igual que con los
   // Pokémon Paradoja: no hay asset real que mostrar, no es un bug de mapeo.
 }
+
+// Alcremie es un caso aparte: sus 63 combinaciones sabor×decoración NO son
+// `species.varieties` (pokemon.name) distintas como el resto de formas de este
+// fichero — son sub-formas cosméticas (`pokemon-form`) de un único `pokemon` (id
+// 869), así que PokemonFichaAssembler no las resuelve (ver esa clase) y no tienen
+// slug corto propio. El selector de decoración (PokemonFichaPage) las referencia
+// directamente por su `pokemon.forms[].name` (ej. "alcremie-ruby-swirl-love-sweet"),
+// así que se registran aquí igual que cualquier otro nombre de API. Cruce sabor/forma
+// en español -> nombre de fichero comprobado con David y verificado a ojo (color medio
+// de cada .webp vs. el sabor real: crema_de_te = verde-amarillento = matcha,
+// crema_de_menta = verde-azulado = menta, etc.) porque PokeAPI no da nombres en
+// español para estas sub-formas.
+const ALCREMIE_FLAVOR_ES = {
+  'vanilla-cream': 'crema_de_vainilla',
+  'ruby-cream': 'crema_rosa',
+  'matcha-cream': 'crema_de_te',
+  'mint-cream': 'crema_de_menta',
+  'lemon-cream': 'crema_de_limon',
+  'salted-cream': 'crema_salada',
+  'ruby-swirl': 'mezcla_rosa',
+  'caramel-swirl': 'mezcla_caramelo',
+  'rainbow-swirl': 'tres_sabores',
+}
+const ALCREMIE_SWEET_ES = {
+  'strawberry-sweet': null, // forma base, sin sufijo en el nombre de fichero
+  'berry-sweet': 'fruto',
+  'love-sweet': 'corazon',
+  'star-sweet': 'estrella',
+  'clover-sweet': 'trebol',
+  'flower-sweet': 'flor',
+  'ribbon-sweet': 'lazo',
+}
+for (const [flavorSlug, flavorEs] of Object.entries(ALCREMIE_FLAVOR_ES)) {
+  for (const [sweetSlug, sweetEs] of Object.entries(ALCREMIE_SWEET_ES)) {
+    NAME_OVERRIDES[`alcremie-${flavorSlug}-${sweetSlug}`] = sweetEs ? `alcremie_${flavorEs}_${sweetEs}` : `alcremie_${flavorEs}`
+  }
+}
+// Único caso real (vainilla + fresa, la decoración por defecto): es literalmente
+// "alcremie", no "alcremie_crema_de_vainilla" — pisa el valor que puso el bucle.
+NAME_OVERRIDES['alcremie-vanilla-cream-strawberry-sweet'] = 'alcremie'
+
+// Resto de especies con el mismo patrón que Alcremie/Unown (varias `pokemon.forms`
+// cosméticas colgando de un único `pokemon`, sin `species.varieties` propia — auditado
+// contra los 1351 `pokemon` cacheados: `JSON_LENGTH(payload->'$.forms') > 1`).
+// Verificado igual que Alcremie: cruce con los ficheros reales de public/animated/.
+const TYPE_ES = {
+  normal: 'normal',
+  fighting: 'lucha',
+  flying: 'volador',
+  poison: 'veneno',
+  ground: 'tierra',
+  rock: 'roca',
+  bug: 'bicho',
+  ghost: 'fantasma',
+  steel: 'acero',
+  fire: 'fuego',
+  water: 'agua',
+  grass: 'planta',
+  electric: 'electrico',
+  psychic: 'psiquico',
+  ice: 'hielo',
+  dragon: 'dragon',
+  dark: 'siniestro',
+  fairy: 'hada',
+}
+// Arceus (18 placas + "unknown", sin asset para "unknown") y Silvally (18 memorias):
+// mismos sufijos de tipo en español, ver TYPE_NAMES_ES en pokemonTypes.js (aquí en
+// minúsculas y sin tilde para que coincida con el nombre de fichero).
+for (const [typeSlug, typeEs] of Object.entries(TYPE_ES)) {
+  NAME_OVERRIDES[`arceus-${typeSlug}`] = `arceus_${typeEs}`
+  NAME_OVERRIDES[`silvally-${typeSlug}`] = `silvally_${typeEs}`
+}
+// La forma normal de cada uno es el fichero base, no "arceus_normal"/"silvally_normal".
+NAME_OVERRIDES['arceus-normal'] = 'arceus'
+NAME_OVERRIDES['silvally-normal'] = 'silvally'
+
+// Vivillon (20 patrones regionales, "floral" es el patrón por defecto/Meadow — mismo
+// override que ya existía para 'vivillon' a secas). polar/tundra/continental no hacen
+// falta aquí: el switch por defecto de abajo ya los resuelve bien. Los 5 últimos
+// (elegant/garden/high-plains/sandstorm/river) son la asociación patrón→fichero menos
+// segura de todo este bloque — no hay nombre oficial en español que contrastar, así
+// que se identificaron mirando el frame real de cada .webp contra el diseño oficial de
+// cada patrón (visto en pokemondb/bulbapedia), no solo por color.
+const VIVILLON_PATTERN_ES = {
+  meadow: 'floral',
+  'icy-snow': 'taiga',
+  garden: 'vergel',
+  elegant: 'oriental',
+  modern: 'moderno',
+  marine: 'marino',
+  archipelago: 'isleno',
+  'high-plains': 'pantano',
+  sandstorm: 'desierto',
+  river: 'oasis',
+  monsoon: 'monzon',
+  savanna: 'estepa',
+  sun: 'solar',
+  ocean: 'oceano',
+  jungle: 'jungla',
+  fancy: 'fantasia',
+  'poke-ball': 'poke_ball',
+}
+for (const [patternSlug, patternEs] of Object.entries(VIVILLON_PATTERN_ES)) {
+  NAME_OVERRIDES[`vivillon-${patternSlug}`] = `vivillon_${patternEs}`
+}
+
+// Furfrou (10 cortes de pelo; "natural" es el fichero base, "kabuki" ya lo resuelve el
+// switch por defecto sin ayuda).
+const FURFROU_TRIM_ES = {
+  heart: 'corazon',
+  star: 'estrella',
+  diamond: 'rombo',
+  pharaoh: 'faraonico',
+  debutante: 'senorita',
+  dandy: 'caballero',
+  matron: 'dama',
+  'la-reine': 'aristocratico',
+}
+for (const [trimSlug, trimEs] of Object.entries(FURFROU_TRIM_ES)) {
+  NAME_OVERRIDES[`furfrou-${trimSlug}`] = `furfrou_${trimEs}`
+}
+NAME_OVERRIDES['furfrou-natural'] = 'furfrou'
+
+// Genesect (4 drives + forma base, que ya resuelve el switch por defecto).
+const GENESECT_DRIVE_ES = {
+  shock: 'fulgorom',
+  burn: 'pirorom',
+  chill: 'criorom',
+  douse: 'hidrorom',
+}
+for (const [driveSlug, driveEs] of Object.entries(GENESECT_DRIVE_ES)) {
+  NAME_OVERRIDES[`genesect-${driveSlug}`] = `genesect_${driveEs}`
+}
+
+// Flabébé/Floette/Florges (5 colores de flor cada una — floette-eternal ya estaba
+// cubierto aparte, es una forma real distinta, no un color).
+const FLOWER_COLOR_ES = {
+  red: 'roja',
+  yellow: 'amarilla',
+  orange: 'naranja',
+  blue: 'azul',
+  white: 'blanca',
+}
+for (const [colorSlug, colorEs] of Object.entries(FLOWER_COLOR_ES)) {
+  NAME_OVERRIDES[`flabebe-${colorSlug}`] = `flabebe_${colorEs}`
+  NAME_OVERRIDES[`floette-${colorSlug}`] = `floette_${colorEs}`
+  NAME_OVERRIDES[`florges-${colorSlug}`] = `florges_${colorEs}`
+}
+
+// Deerling/Sawsbuck (4 estaciones).
+const SEASON_ES = {
+  spring: 'primavera',
+  summer: 'verano',
+  autumn: 'otono',
+  winter: 'invierno',
+}
+for (const [seasonSlug, seasonEs] of Object.entries(SEASON_ES)) {
+  NAME_OVERRIDES[`deerling-${seasonSlug}`] = `deerling_${seasonEs}`
+  NAME_OVERRIDES[`sawsbuck-${seasonSlug}`] = `sawsbuck_${seasonEs}`
+}
+
+// Cherrim (encapotado/soleado), Shellos/Gastrodon (mar este/oeste), Burmy (3 mantos —
+// Mothim no hereda sprite propio por manto en el pack, solo tiene base+shiny).
+NAME_OVERRIDES['cherrim-overcast'] = 'cherrim_encapotado'
+NAME_OVERRIDES['cherrim-sunshine'] = 'cherrim_soleado'
+NAME_OVERRIDES['shellos-west'] = 'shellos_oeste'
+NAME_OVERRIDES['shellos-east'] = 'shellos_este'
+NAME_OVERRIDES['gastrodon-west'] = 'gastrodon_oeste'
+NAME_OVERRIDES['gastrodon-east'] = 'gastrodon_este'
+NAME_OVERRIDES['burmy-plant'] = 'burmy_planta'
+NAME_OVERRIDES['burmy-sandy'] = 'burmy_arena'
+NAME_OVERRIDES['burmy-trash'] = 'burmy_basura'
 
 export function animatedSpriteResourceName(pokemonApiName) {
   const override = NAME_OVERRIDES[pokemonApiName]
@@ -282,7 +466,16 @@ export function animatedSpriteResourceName(pokemonApiName) {
 }
 
 export function animatedSpriteUrl(pokemonApiName) {
-  return `/animated/${animatedSpriteResourceName(pokemonApiName)}.webm`
+  // Las formas Gigamax no tienen sprite propio en NAME_OVERRIDES (cae al de la forma
+  // base, ej. 'charizard-gmax' -> 'charizard') porque ese mapeo se pensó para el pack
+  // .webp normal — el aspecto Gigamax real vive aparte, en .gif descargados de Wikidex
+  // con scripts/dinamax_live_sprites/scrap_gifs_gigamax.py y copiados a mano a
+  // public/animated/{resourceName}_gigamax.gif (sin más variantes: no hay versión
+  // hembra ni shiny en el material de origen).
+  if (pokemonApiName.endsWith('-gmax')) {
+    return `/animated/${animatedSpriteResourceName(pokemonApiName)}_gigamax.gif`
+  }
+  return `/animated/${animatedSpriteResourceName(pokemonApiName)}.webp`
 }
 
 // Variante hembra del sprite BASE (especies con dimorfismo visual pero sin ser una
@@ -291,5 +484,16 @@ export function animatedSpriteUrl(pokemonApiName) {
 // existe para un subconjunto de especies en el pack; quien la use debe comprobar que
 // el archivo carga (ver useFemaleSpriteAvailable) antes de ofrecer el toggle.
 export function femaleAnimatedSpriteUrl(pokemonApiName) {
-  return `/animated/${animatedSpriteResourceName(pokemonApiName)}_hembra.webm`
+  return `/animated/${animatedSpriteResourceName(pokemonApiName)}_hembra.webp`
+}
+
+// Variantes shiny — el pack (re-exportado a .webp) ahora sí las incluye, con el mismo
+// sufijo _shiny que ya usaba la app Android de referencia. Igual que con _hembra, no
+// hay forma de saber de antemano qué especies lo tienen sin comprobar el archivo.
+export function shinyAnimatedSpriteUrl(pokemonApiName) {
+  return `/animated/${animatedSpriteResourceName(pokemonApiName)}_shiny.webp`
+}
+
+export function femaleShinyAnimatedSpriteUrl(pokemonApiName) {
+  return `/animated/${animatedSpriteResourceName(pokemonApiName)}_hembra_shiny.webp`
 }

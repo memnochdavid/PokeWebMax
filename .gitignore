@@ -10,6 +10,7 @@
 # el repo público.
 frontend/public/sprites_home/
 frontend/public/animated/
+frontend/public/objects/
 
 # Backup de la base de datos (scripts/dump_db.sh / restore_db.sh) — binario pesado que
 # no diffea bien en git, David lo pasa a mano entre máquinas/equipos.

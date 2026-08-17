@@ -12,6 +12,14 @@ export default function usePokemonFicha(idOrName) {
   const load = useCallback(() => {
     setStatus('loading')
     setError(null)
+    // Se limpia aquí, no solo al cambiar idOrName vía el efecto de abajo: si no, al
+    // navegar de un Pokémon a otro (ej. cadena evolutiva) el render de transición
+    // tiene `status` ya en 'loading' pero `ficha` todavía apuntando al Pokémon
+    // anterior — inofensivo mientras el guard de arriba siga siendo solo `!ficha`,
+    // pero cualquier código que lea `ficha.pokemon` sin pasar por ese guard (como
+    // hooks declarados antes del `if (!ficha) return null`) vería datos del
+    // Pokémon equivocado durante esa ventana.
+    setFicha(null)
 
     axios
       .get(`/api/pokemon/${idOrName}/ficha`)

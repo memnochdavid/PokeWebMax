@@ -31,7 +31,7 @@ use Symfony\Component\HttpKernel\KernelInterface;
 class WikidexImportEffectsCommand extends Command
 {
     /** @var string[] */
-    private const RESOURCE_TYPES = ['ability', 'move'];
+    private const RESOURCE_TYPES = ['ability', 'move', 'item'];
 
     public function __construct(
         private readonly PokeApiResourceCacheRepository $resourceCacheRepository,
@@ -88,7 +88,17 @@ class WikidexImportEffectsCommand extends Command
 
             foreach ($namesById as $resourceId => $names) {
                 $text = null;
-                foreach ($this->titleCandidates($names['es'] ?? null, $names['es-419'] ?? null) as $candidate) {
+                $candidates = $this->titleCandidates($names['es'] ?? null, $names['es-419'] ?? null);
+                if ($resourceType === 'item') {
+                    // WikiDex desambigua algunos títulos de objeto con "(objeto)"
+                    // cuando esa palabra también significa otra cosa en la wiki (ej.
+                    // "Antídoto (objeto)") — mismo caso ya visto en
+                    // scripts/build_item_icon_map.py para los iconos.
+                    foreach ($candidates as $candidate) {
+                        $candidates[] = $candidate . ' (objeto)';
+                    }
+                }
+                foreach ($candidates as $candidate) {
                     if (isset($textByTitle[$candidate])) {
                         $text = $textByTitle[$candidate];
                         break;

@@ -2,6 +2,8 @@
 
 namespace App\Service\PokeApi;
 
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\HttpClient\Exception\ClientExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
@@ -9,14 +11,27 @@ class PokeApiClient
 {
     private const BASE_URL = 'https://pokeapi.co/api/v2/';
 
-    public function __construct(private readonly HttpClientInterface $httpClient)
-    {
+    public function __construct(
+        private readonly HttpClientInterface $httpClient,
+        private readonly CacheInterface $cache,
+    ) {
     }
 
     public function fetchResource(string $resourceType, string $idOrName): array
     {
         return $this->get($resourceType, $idOrName);
     }
+
+    // La lista maestra de un recurso (nombres de la especie/objeto que sea) apenas
+    // cambia entre sesiones — solo se mueve cuando sale un juego nuevo. Sin caché,
+    // PokemonListService/ItemListService la piden ENTERA a la API real de PokeAPI en
+    // cada carga de /objetos o / (medido: ~5s para pokemon-species, ~1025 filas; ~0,8s
+    // para item, ~2223) — el cuello de botella real de esas dos vistas no era la BD
+    // local (ya usa proyecciones ligeras, ver PokeApiResourceCacheRepository) sino este
+    // único GET en vivo. 6h de TTL: suficiente para no repetirlo en cada visita de una
+    // sesión de trabajo, corto para que un recurso nuevo aparezca sin tener que
+    // reiniciar el contenedor a mano.
+    private const RESOURCE_LIST_TTL_SECONDS = 6 * 3600;
 
     /**
      * Lista completa de un recurso (id + nombre) tal como lo conoce PokeAPI. Un único
@@ -29,6 +44,21 @@ class PokeApiClient
      * @return array<int, array{id: int, name: string}>
      */
     public function fetchResourceList(string $resourceType): array
+    {
+        return $this->cache->get(
+            'pokeapi_resource_list_' . $resourceType,
+            function (ItemInterface $item) use ($resourceType) {
+                $item->expiresAfter(self::RESOURCE_LIST_TTL_SECONDS);
+
+                return $this->doFetchResourceList($resourceType);
+            },
+        );
+    }
+
+    /**
+     * @return array<int, array{id: int, name: string}>
+     */
+    private function doFetchResourceList(string $resourceType): array
     {
         $data = $this->httpClient
             ->request('GET', self::BASE_URL . $resourceType . '?limit=100000')

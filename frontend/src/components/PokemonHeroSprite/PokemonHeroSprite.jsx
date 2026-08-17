@@ -1,36 +1,29 @@
-import useVideoFallback from '../../hooks/useVideoFallback.js'
-import useChromaKeyVideo from '../../hooks/useChromaKeyVideo.js'
+import useAnimatedSpriteFallback from '../../hooks/useAnimatedSpriteFallback.js'
 
 // Banner de la ficha: intenta el sprite animado local (public/animated/), y si no hay
 // (no está en el pack) o falla al cargar, cae al sprite estático (ya con su propio
-// fallback resuelto por el llamador, ver useImageFallback). El vídeo se renderiza vía
-// canvas con chroma-key (ver useChromaKeyVideo) para quitar el fondo blanco que traen
-// estos .webm, ya que el <video> nativo no puede mostrar transparencia.
+// fallback resuelto por el llamador, ver useImageFallback). El pack es .webp animado
+// con canal alfa real (a diferencia del .webm anterior, que traía fondo blanco y
+// necesitaba un chroma-key por canvas para quitarlo — ya no hace falta), así que un
+// <img> normal basta.
 export default function PokemonHeroSprite({ animatedSrc, staticSrc, staticOnError, alt, width, height, className }) {
-  const video = useVideoFallback()
-  const useVideoSprite = Boolean(animatedSrc) && !video.failed
-  const { videoRef, canvasRef } = useChromaKeyVideo(useVideoSprite ? animatedSrc : null)
+  const sprite = useAnimatedSpriteFallback()
+  const useAnimated = Boolean(animatedSrc) && !sprite.failed
 
-  if (!useVideoSprite) {
+  if (!useAnimated) {
     return (
       <img className={className} src={staticSrc} onError={staticOnError} alt={alt} width={width} height={height} />
     )
   }
 
   return (
-    <>
-      <video
-        ref={videoRef}
-        src={animatedSrc}
-        onError={video.onError}
-        autoPlay
-        loop
-        muted
-        playsInline
-        aria-hidden="true"
-        style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
-      />
-      <canvas ref={canvasRef} className={className} width={width} height={height} role="img" aria-label={alt} />
-    </>
+    <img
+      className={className}
+      src={animatedSrc}
+      onError={sprite.onError}
+      alt={alt}
+      width={width}
+      height={height}
+    />
   )
 }

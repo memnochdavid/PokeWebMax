@@ -132,6 +132,22 @@ export function damageClassName(slug, language) {
   return slug.length > 0 ? slug[0].toUpperCase() + slug.slice(1) : slug
 }
 
+// level-up/machine/tutor/egg: los 4 métodos de aprendizaje que de verdad aparecen en
+// los datos de este proyecto (comprobado con SQL) — sin icono propio en el pack
+// descargado de WikiDex (a diferencia de físico/especial/estado), así que se muestra
+// como etiqueta de texto corta, mismo criterio que ya usaba
+// `determineLearnIndicatorText`/`formatMoveLearnMethod` en el proyecto Android de
+// referencia (Movimientos.kt): "Nivel" lleva además el número al lado en el JSX, no
+// aquí — esta función solo da el nombre del método.
+const LEARN_METHOD_ES = { 'level-up': 'Nivel', machine: 'MT/MO', tutor: 'Tutor', egg: 'Cría' }
+const LEARN_METHOD_EN = { 'level-up': 'Level', machine: 'TM/HM', tutor: 'Tutor', egg: 'Egg' }
+
+export function moveLearnMethodName(method, language) {
+  if (!method) return '—'
+  if (language === 'es') return LEARN_METHOD_ES[method] ?? method
+  return LEARN_METHOD_EN[method] ?? method
+}
+
 // Iconos copiados de Pokedex_API (proyecto Android de referencia, solo lectura — ver
 // CLAUDE.md), no generados aquí. Estáticos porque solo hay 3 valores posibles.
 const DAMAGE_CLASS_ICONS = {
@@ -156,17 +172,33 @@ function idFromUrl(url) {
   return Number(segments[segments.length - 1])
 }
 
-// Nivel en el que se aprende un movimiento por subida de nivel, a partir de
+// Prioridad para decidir CUÁL de los métodos de aprendizaje mostrar cuando un
+// movimiento tiene varios entre distintos juegos (ej. Placaje se aprende por nivel en
+// unos y ya lo trae de fábrica en otros) — mismo criterio y mismo orden que
+// `determineLearnIndicatorText` en el proyecto Android de referencia
+// (Movimientos.kt): nivel primero, luego MT/MO, tutor, cría. `null` no es un método
+// real de PokeAPI (algunos recursos tienen huecos raros, ej. formas Paradoja/Totem
+// sin movimientos MT registrados) y se descarta al elegir prioridad.
+const LEARN_METHOD_PRIORITY = ['level-up', 'machine', 'tutor', 'egg']
+
+// Método por el que se aprende un movimiento (y el nivel, si aplica), a partir de
 // `pokemon.moves` (ya viene completo en la ficha — el payload de `pokemon` no se
-// recorta, no hace falta tocar el backend para esto). Un movimiento puede aparecer con
-// method 'level-up' en varios version_group con niveles distintos entre generaciones
-// (ver Bulbasaur: 'tackle' es nivel 1 en rojo/azul); se usa el version_group con el id
+// recorta, no hace falta tocar el backend para esto). El mismo movimiento puede
+// aparecer con métodos y niveles distintos entre generaciones (ver Bulbasaur:
+// 'tackle' es nivel 1 en rojo/azul); para el nivel se usa el version_group con el id
 // más alto (el más reciente, los ids de PokeAPI son cronológicos) como "el nivel
-// actual". null si el movimiento nunca se aprende por nivel (solo MT/cría/tutor) —
-// se ordena al final de la tabla, no como si fuera nivel 0.
-export function moveLevelLearned(pokemonMoves, moveName) {
+// actual", igual que antes. Para el MÉTODO se usa la prioridad de arriba sobre todos
+// los juegos en los que aparece, no solo el más reciente — un movimiento que en algún
+// juego se aprendía por nivel sigue clasificándose como "Nivel", aunque en la versión
+// más reciente ya no sea así.
+export function moveLearnMethod(pokemonMoves, moveName) {
   const entry = pokemonMoves?.find((m) => m.move.name === moveName)
-  if (!entry) return null
+  if (!entry) return { method: null, level: null }
+
+  const methodsPresent = new Set(entry.version_group_details.map((vgd) => vgd.move_learn_method.name))
+  const method = LEARN_METHOD_PRIORITY.find((m) => methodsPresent.has(m)) ?? entry.version_group_details[0]?.move_learn_method.name ?? null
+
+  if (method !== 'level-up') return { method, level: null }
 
   let best = null
   for (const vgd of entry.version_group_details) {
@@ -176,25 +208,33 @@ export function moveLevelLearned(pokemonMoves, moveName) {
       best = { versionGroupId, level: vgd.level_learned_at }
     }
   }
-  return best?.level ?? null
+  return { method, level: best?.level ?? null }
 }
 
 // `t` es el i18next `t()` de react-i18next (ver PokemonFichaPage.jsx) — prosa de
 // interfaz con interpolación (nivel, ítem...), no un catálogo estático, así que va por
 // locales/*.json y no inline como FICHA_SECTIONS/DAMAGE_CLASS_ES.
+//
+// Devuelve `{ text, item }` en vez de solo el texto — `item` es el `{name, url}` crudo
+// de PokeAPI cuando la evolución depende de un objeto (piedra, objeto que se lleva
+// puesto...), para que el JSX pueda pintar su icono/enlace además de la frase (ver
+// itemIconUrl en itemSprite.js). `null` si el método no involucra ningún objeto.
 function evolutionMethodLabel(details, t) {
   const d = details?.[0]
   if (!d) return null
-  if (d.min_level) return t('ficha.evoMethod.level', { level: d.min_level })
-  if (d.item) return t('ficha.evoMethod.useItem', { item: d.item.name.replace(/-/g, ' ') })
-  if (d.min_happiness) return t('ficha.evoMethod.happiness', { value: d.min_happiness })
-  if (d.trigger?.name === 'trade') return t('ficha.evoMethod.trade')
-  return t('ficha.evoMethod.default')
+  if (d.min_level) return { text: t('ficha.evoMethod.level', { level: d.min_level }), item: null }
+  if (d.item) {
+    return { text: t('ficha.evoMethod.useItem', { item: d.item.name.replace(/-/g, ' ') }), item: d.item }
+  }
+  if (d.min_happiness) return { text: t('ficha.evoMethod.happiness', { value: d.min_happiness }), item: null }
+  if (d.trigger?.name === 'trade') return { text: t('ficha.evoMethod.trade'), item: null }
+  return { text: t('ficha.evoMethod.default'), item: null }
 }
 
 // Aplana la cadena evolutiva (estructura recursiva chain.evolves_to[]) a una lista
-// ordenada de etapas con el método de la transición ANTERIOR a cada una — ignora ramas
-// alternativas (ej. Eevee), suficiente para una vista lineal simple.
+// ordenada de etapas con el método de la transición ANTERIOR a cada una (ver
+// evolutionMethodLabel) — ignora ramas alternativas (ej. Eevee), suficiente para una
+// vista lineal simple.
 export function evolutionStages(evolutionChain, t) {
   const stages = []
   let node = evolutionChain?.chain

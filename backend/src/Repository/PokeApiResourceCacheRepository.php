@@ -125,6 +125,40 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
     }
 
     /**
+     * Igual que findLocalizedNamesByType pero indexado por slug (columna `name`) en
+     * vez de resourceId — para cuando quien llama ya tiene el slug a mano (ej. el
+     * nombre del movimiento que enseña una MT/MO/DT, ver findMachineMoveNamesByItem)
+     * y cruzar por id sería un paso de más.
+     *
+     * @param string[] $languages
+     * @return array<string, array<string, string>> nombre por idioma, indexado por slug
+     */
+    public function findLocalizedNamesByTypeIndexedBySlug(string $resourceType, array $languages): array
+    {
+        $rows = $this->getEntityManager()->getConnection()->executeQuery(
+            "SELECT name, JSON_EXTRACT(payload, '$.names') AS names_json
+             FROM pokeapi_resource_cache
+             WHERE resource_type = :type",
+            ['type' => $resourceType],
+        )->fetchAllAssociative();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $names = json_decode((string) $row['names_json'], true) ?? [];
+            $byLanguage = [];
+            foreach ($names as $entry) {
+                $lang = $entry['language']['name'] ?? null;
+                if ($lang !== null && in_array($lang, $languages, true)) {
+                    $byLanguage[$lang] = $entry['name'];
+                }
+            }
+            $result[$row['name']] = $byLanguage;
+        }
+
+        return $result;
+    }
+
+    /**
      * De una lista de ids candidatos, cuáles ya están cacheados para ese resourceType
      * — usado por el cacheo por lotes para no volver a pedirle a PokeAPI algo que ya
      * se tiene (defensivo: el frontend ya filtra por `cached` antes de mandar el
@@ -286,6 +320,50 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
     }
 
     /**
+     * Igual que findPokemonTypesById() + findPokemonListMetricsById() combinados en
+     * UNA sola consulta — usado solo por PokemonListService::listAll(), que antes
+     * llamaba a los dos por separado y por tanto leía el payload de las ~1350 filas de
+     * `pokemon` (¬132KB de media cada una por la lista de movimientos completa) DOS
+     * veces: JSON_EXTRACT no evita que el motor lea la columna `payload` entera de
+     * cada fila para poder parsearla, aunque el resultado que viaje a PHP sea
+     * pequeño. Medido: ~1,5s + ~2,8s por separado -> con esta única consulta ambos
+     * costes se pagan una sola vez. Si algo nuevo necesita SOLO tipos o SOLO
+     * peso/altura/stats, usar los métodos separados de arriba en vez de este.
+     *
+     * @return array<int, array{types: string[], weight: ?int, height: ?int, statsTotal: ?int}>
+     */
+    public function findPokemonTypesAndMetricsById(): array
+    {
+        $rows = $this->getEntityManager()->getConnection()->executeQuery(
+            "SELECT resource_id,
+                    JSON_EXTRACT(payload, '$.types') AS types_json,
+                    JSON_EXTRACT(payload, '$.weight') AS weight,
+                    JSON_EXTRACT(payload, '$.height') AS height,
+                    JSON_EXTRACT(payload, '$.stats') AS stats_json
+             FROM pokeapi_resource_cache
+             WHERE resource_type = 'pokemon'"
+        )->fetchAllAssociative();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $types = json_decode((string) $row['types_json'], true) ?? [];
+            usort($types, static fn (array $a, array $b) => $a['slot'] <=> $b['slot']);
+            $weight = json_decode((string) $row['weight']);
+            $height = json_decode((string) $row['height']);
+            $stats = json_decode((string) $row['stats_json'], true) ?? [];
+
+            $result[(int) $row['resource_id']] = [
+                'types' => array_map(static fn (array $t) => $t['type']['name'], $types),
+                'weight' => $weight !== null ? (int) $weight : null,
+                'height' => $height !== null ? (int) $height : null,
+                'statsTotal' => $stats !== [] ? array_sum(array_column($stats, 'base_stat')) : null,
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
      * Solo para resourceType 'evolution-chain': profundidad de cada cadena (1, 2, 3...
      * etapas desde la base), calculada recorriendo `chain.evolves_to` en PHP. Los
      * payloads de este recurso son pequeños (a diferencia de pokemon-species), así que
@@ -326,4 +404,112 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
         return $decoded === true || $decoded === 1;
     }
 
+    /**
+     * Solo para resourceType 'item': categoría y coste de cada objeto cacheado —
+     * proyección ligera para el listado/filtro, sin hidratar el payload completo
+     * (efectos/descripciones/game_indices no hacen falta ahí). El "pocket" (bolsillo,
+     * agrupación más amplia que categoría) no vive en `item`, hay que cruzarlo con
+     * `item-category` — ver findItemCategoryPockets().
+     *
+     * @return array<string, array{category: string, cost: ?int}> indexado por nombre (slug) del item
+     */
+    public function findItemSummaries(): array
+    {
+        $rows = $this->getEntityManager()->getConnection()->executeQuery(
+            "SELECT name,
+                    JSON_EXTRACT(payload, '$.category.name') AS category_name,
+                    JSON_EXTRACT(payload, '$.cost') AS cost
+             FROM pokeapi_resource_cache
+             WHERE resource_type = 'item'"
+        )->fetchAllAssociative();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $cost = json_decode((string) $row['cost']);
+            $result[$row['name']] = [
+                'category' => (string) json_decode((string) $row['category_name']),
+                'cost' => $cost !== null ? (int) $cost : null,
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Solo para resourceType 'item-category': el "pocket" (bolsillo de la mochila) de
+     * cada categoría de objeto — son solo 54 filas, se decodifica el payload entero.
+     *
+     * @return array<string, string> nombre de pocket indexado por nombre de categoría
+     */
+    public function findItemCategoryPockets(): array
+    {
+        $rows = $this->getEntityManager()->getConnection()->executeQuery(
+            "SELECT name, JSON_EXTRACT(payload, '$.pocket.name') AS pocket_name
+             FROM pokeapi_resource_cache
+             WHERE resource_type = 'item-category'"
+        )->fetchAllAssociative();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $result[$row['name']] = (string) json_decode((string) $row['pocket_name']);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Orden de preferencia de version_group para decidir qué movimiento representa
+     * cada MT/MO/DT — el mismo número de máquina enseña movimientos distintos según
+     * el juego (ver `machine`: item+move+version_group). Mismo criterio y mismas
+     * listas que scripts/build_item_icon_map.py (el icono por tipo de esas máquinas
+     * usa esta misma resolución) — si se toca una, hay que tocar la otra.
+     */
+    private const MACHINE_VERSION_GROUP_PRIORITY = [
+        'tm' => ['scarlet-violet', 'the-teal-mask', 'the-indigo-disk', 'legends-za'],
+        'hm' => [
+            'brilliant-diamond-shining-pearl', 'omega-ruby-alpha-sapphire', 'x-y',
+            'black-2-white-2', 'black-white', 'heartgold-soulsilver', 'platinum',
+            'diamond-pearl', 'firered-leafgreen', 'emerald', 'ruby-sapphire',
+            'crystal', 'gold-silver', 'yellow', 'red-blue',
+        ],
+        'tr' => ['sword-shield'],
+    ];
+
+    /**
+     * Solo para resourceType 'machine': qué movimiento enseña cada MT/MO/DT ("tmNN",
+     * "hmNN", "trNN") — usado para mostrarlo en la card/ficha del objeto, no solo para
+     * elegir icono (ver MACHINE_VERSION_GROUP_PRIORITY arriba).
+     *
+     * @return array<string, string> slug de movimiento indexado por slug de item
+     */
+    public function findMachineMoveNamesByItem(): array
+    {
+        $rows = $this->getEntityManager()->getConnection()->executeQuery(
+            "SELECT JSON_UNQUOTE(JSON_EXTRACT(payload, '$.item.name')) AS item_name,
+                    JSON_UNQUOTE(JSON_EXTRACT(payload, '$.move.name')) AS move_name,
+                    JSON_UNQUOTE(JSON_EXTRACT(payload, '$.version_group.name')) AS version_group
+             FROM pokeapi_resource_cache
+             WHERE resource_type = 'machine'
+               AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.item.name')) REGEXP '^(tm|hm|tr)[0-9]+$'"
+        )->fetchAllAssociative();
+
+        $moveByItemAndGroup = [];
+        foreach ($rows as $row) {
+            $moveByItemAndGroup[$row['item_name']][$row['version_group']] = $row['move_name'];
+        }
+
+        $result = [];
+        foreach ($moveByItemAndGroup as $itemName => $movesByGroup) {
+            $prefix = substr($itemName, 0, 2);
+            $priority = self::MACHINE_VERSION_GROUP_PRIORITY[$prefix] ?? [];
+            foreach ($priority as $versionGroup) {
+                if (isset($movesByGroup[$versionGroup])) {
+                    $result[$itemName] = $movesByGroup[$versionGroup];
+                    continue 2;
+                }
+            }
+        }
+
+        return $result;
+    }
 }

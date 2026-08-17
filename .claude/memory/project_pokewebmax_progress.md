@@ -1215,6 +1215,138 @@ navegador** (sin `claude-in-chrome` en toda la sesión) — pendiente que David
 confirme visualmente que el contraste/aspecto del navbar rojo y del retoque de
 paleta le convencen.
 
+## Pack animado: webm→webp, Gigamax local y selector de decoración — HECHO 2026-08-17
+
+**Migración webm→webp**: David sustituyó el pack `.webm` de `public/animated/` por uno
+`.webp` que además ya incluye shinies. El nuevo pack tiene **canal alfa real**
+(comprobado con PIL: esquinas de un frame dan alpha=0, no fondo blanco), así que se
+pudo eliminar por completo el hack de chroma-key por `<canvas>`
+(`useChromaKeyVideo.js`, `useVideoFallback.js` borrados) — `PokemonHeroSprite` ahora
+es un `<img>` normal. `animatedSprite.js` cambió extensión a `.webp` y ganó
+`shinyAnimatedSpriteUrl`/`femaleShinyAnimatedSpriteUrl`. Nuevo toggle ☆/★ combinado
+con el ♂/♀ existente (`useAnimatedSpriteVariants.js`, sustituye a
+`useFemaleSpriteAvailable.js`, comprueba `_hembra`/`_shiny`/`_hembra_shiny` con HEAD
+en paralelo) — si la combinación exacta género+shiny no existe para la especie
+activa, cae a shiny normal en vez de perder la animación entera, sin apagar el botón.
+
+**Gigamax local (no Wikidex)**: la app Android de referencia mostraba el sprite
+Gigamax hotlinkeado desde `images.wikidexcdn.net` (confirmado leyendo
+`LiveSprite.kt`, `dinamaxLiveSprites`). David descargó esos 33 GIFs a
+`scripts/dinamax_live_sprites/` y pidió dejar de depender de Wikidex — se movieron y
+renombraron a `public/animated/{resourceName}_gigamax.gif` (mismo resourceName que ya
+calculaba `animatedSpriteResourceName()` para cada forma Gigamax, verificado con los
+33 ids/nombres reales vía `/api/pokemon/{id}/ficha`). `animatedSpriteUrl()` ahora
+tiene un caso especial: si el nombre acaba en `-gmax`, apunta a ese `.gif` en vez de
+caer a la forma base. Appletun-Gmax (10217) no estaba en el material de origen,
+sigue cayendo a la forma base como antes — no es un bug, es hueco de contenido real.
+
+**Selector de decoración para especies "un solo `pokemon` con muchas `pokemon.forms`
+cosméticas"**: David reportó que a Alcremie "no le aparecen las formas" aunque sí
+había `.webp` locales. Investigado a fondo: Alcremie NO tiene 63 `species.varieties`
+(solo 2: normal y gmax) — sus 63 combinaciones sabor×decoración son
+`pokemon.forms[]` (sub-formas `pokemon-form` cosméticas del mismo `pokemon` id 869),
+que `PokemonFichaAssembler` nunca resuelve a propósito (ver comentario en esa clase:
+decisión deliberada de una ronda anterior para el caso contrario — Raichu/Toxtricity,
+que SÍ son `species.varieties` reales). Como `ficha.pokemon.forms` ya viaja tal cual
+en el payload (cero cambio de backend necesario), se añadió un `<select>` en el hero
+banner (`PokemonFichaPage.jsx`, condición `pokemon.forms.length > 1`) que elige entre
+esas sub-formas para el sprite animado — no las convierte en cards navegables de la
+pestaña Formas (siguen sin ID de pokemon propio, no hay a dónde hacer `<Link>`).
+
+Auditado con SQL contra las 1351 `pokemon` cacheadas
+(`JSON_LENGTH(payload->'$.forms') > 1`, 27 especies con este patrón) y cableado
+NAME_OVERRIDES para todas las que tenían asset real en el pack: Alcremie (63),
+Unown (28 — de paso salió un bug real: los sufijos sueltos `-f`/`-m` de las letras F/M
+colisionaban con el caso de género `f`/`m` del switch, pensado para `pikachu-f` etc.),
+Arceus (18 placas + "unknown" sin asset), Silvally (18 memorias), Vivillon (20
+patrones — los 5 últimos, elegant/garden/high-plains/sandstorm/river, identificados
+mirando el frame real de cada `.webp` contra el diseño oficial de cada patrón, no solo
+por color: es la asociación menos segura de todo el bloque, revisar si algo no cuadra
+visualmente), Furfrou (10 cortes), Genesect (4 drives), Flabébé/Floette/Florges (5
+colores cada una), Deerling/Sawsbuck (4 estaciones), Cherrim/Shellos/Gastrodon/Burmy.
+Total 194/195 combinaciones auditadas resuelven a fichero real. Especies con el mismo
+patrón de datos pero SIN asset por variante en el pack (Mothim, Xerneas, Pichu,
+Sinistea/Polteageist, Poltchageist/Sinistcha, Scatterbug/Spewpa) se dejaron sin
+override — el selector les sale igual pero cae al sprite base, hueco de contenido
+real, no bug.
+
+**Caso especial excluido a propósito**: Frillish-male/Jellicent-male/Pyroar-male
+tienen el MISMO patrón de datos (`pokemon.forms: [x-male, x-female]` de un único
+`pokemon`), pero ese dimorfismo ya lo cubre el toggle ♂/♀ existente (`hasFemale` vía
+`useAnimatedSpriteVariants` ya encontraba `frillish_hembra.webp` etc. antes de este
+cambio) — se excluyen explícitamente del selector de decoración
+(`isMaleFemaleFormPair` en `PokemonFichaPage.jsx`) para no ofrecer dos controles
+distintos para elegir lo mismo.
+
+**Verificado**: todo por curl/node contra el backend y el dev server de Vite (HEAD a
+`.webp`/`.gif` reales, `content-type` correcto, 404→fallback SPA de Vite detectado
+igual que en el resto del pack), y con un script node que resuelve
+`animatedSpriteResourceName()` de las 195 combinaciones auditadas contra el
+filesystem real. **No verificado a ojo en navegador** (sin `claude-in-chrome` en toda
+la sesión) — el selector de decoración en concreto (`<select>` con 63 opciones para
+Alcremie) no se ha visto renderizado de verdad, solo probado que cada opción produce
+una URL que carga.
+
+## Iconos de MT/MO/DT/mentas + movimiento en su card + fallback WikiDex de Efecto — HECHO 2026-08-17
+
+**Iconos de máquinas por tipo, no por objeto**: MT (`tmNN`), MO (`hmNN`) y DT (`trNN`)
+no tienen icono propio en WikiDex — el real depende del TIPO del movimiento que
+enseñan (pedido explícito de David, con los 18 iconos de tipo estilo 9ª gen
+"`MT_tipo_X_EP.png`" ya descargados a mano). `scripts/build_item_icon_map.py` ganó
+`load_machine_type_icons(prefix, version_group_priority)`: cruza `machine`
+(item+move+version_group, cacheado al 100%) con el `type` de cada movimiento. El
+mismo número de máquina enseña movimientos distintos según el juego, así que hay un
+orden de prioridad de version_group por prefijo: MT prioriza `scarlet-violet` (de ahí
+sale el estilo "EP" pedido), MO no tiene versión moderna (se quitaron en 7ª gen) así
+que usa el juego con MO más reciente en caché, DT solo existió en `sword-shield`. MO y
+DT reutilizan el mismo `TM_TYPE_ICON`, sin fichero propio (pedido explícito). Mentas
+de naturaleza (`NATURE_MINT_ICON`): no tienen página propia en WikiDex, solo una
+tabla-resumen ("Menta") que confirma que el icono solo distingue por la
+CARACTERÍSTICA que sube (6 colores para 21 mentas) — esos 6 PNG se descargaron nuevos
+de esa tabla. Total del cruce: 957/2223 objetos con icono local (antes 949, antes 928,
+antes 694 — ver entradas anteriores de esta sección para el histórico).
+
+**Movimiento enseñado, ahora también en runtime (no solo para el icono)**: nuevo
+`PokeApiResourceCacheRepository::findMachineMoveNamesByItem()` (mismo cruce y misma
+prioridad de version_group que el script Python — **si se toca uno hay que tocar el
+otro**, están duplicados a propósito porque uno corre en Python offline y el otro en
+PHP en caliente) + `findLocalizedNamesByTypeIndexedBySlug()` (variante de
+`findLocalizedNamesByType` indexada por slug en vez de por resourceId, para cuando
+solo se tiene el nombre del movimiento, no su id). `ItemListService::listAll()` y
+`ItemFichaAssembler` exponen `move`/`taught_move` respectivamente; `ItemCard`
+(`moveLabel`) y `ItemFichaPage` (badge junto a categoría/pocket) lo pintan.
+
+**Fallback WikiDex para "Efecto" de objetos**: David notó que ningún objeto muestra
+descripción en español — comprobado con SQL: `item.effect_entries` **nunca** trae
+`es` (0 de los comprobados), mismo hueco real ya documentado para ability/move ("0/373
+abilities, 0/937 moves", ver "paridad total" más abajo en este fichero). La
+infraestructura para resolverlo YA EXISTÍA y no hizo falta tocarla: `WikidexEffectText`
+ya es genérica por `resourceType` (columna, no hardcodeada a ability/move), y
+`scripts/wikidex_export_effects.py` YA exportaba cualquier página con sección
+"== Efecto ==" sin filtrar por tipo (2621 páginas, incluyendo ítems) — el filtro vivía
+solo en `WikidexImportEffectsCommand::RESOURCE_TYPES`, que pasó de
+`['ability', 'move']` a incluir también `'item'`. Se añadió el candidato de título con
+sufijo " (objeto)" (WikiDex desambigua así los nombres de objeto que también
+significan otra cosa en la wiki, ej. "Antídoto (objeto)" — mismo caso ya visto en el
+cruce de iconos). Resultado: 567 objetos con texto de Efecto en español ahora (antes
+0). `ItemFichaAssembler` expone `wikidexEffectText`, `ItemFichaPage` lo pasa como 4º
+argumento a `latestVersionedText()` (que ya soportaba este parámetro, sin cambios ahí).
+La descripción por versión (`itemFlavorTextsByVersionGroup`) NO tenía este problema —
+verificado que ya caía a inglés por version_group individual correctamente (13/13
+grupos para Piedra Fuego, 5 en español real + 8 con fallback marcados "EN"); lo que
+faltaba era solo Efecto.
+
+**Deliberadamente fuera de alcance** (ver .claude/memory/project_pokewebmax_wikidex_dump_analysis.md
+si se retoma): la sección "== Ubicación ==" / plantilla `{{Localización}}` de
+objetos — comprobado que solo 2/2330 objetos tienen la primera y que la segunda (269
+objetos) contiene prosa narrativa larga (minijuegos, NPCs), no datos puntuales — no se
+construyó ningún importador para eso.
+
+**Verificado**: todo por curl/SQL contra el backend en marcha (conteos de match,
+`wikidexEffectText` presente en la respuesta para varios objetos reales) y Vite HMR sin
+errores. **No verificado a ojo en navegador** (sin `claude-in-chrome` en toda la
+sesión).
+
 ## Pendiente / siguiente paso natural
 
 - No hay vistas de listado/detalle navegable para ningún recurso salvo Pokémon — el resto

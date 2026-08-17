@@ -4,6 +4,8 @@ import StatusPage from './pages/StatusPage/StatusPage.jsx'
 import CacheAllPage from './pages/CacheAllPage/CacheAllPage.jsx'
 import PokemonListPage from './pages/PokemonListPage/PokemonListPage.jsx'
 import PokemonFichaPage from './pages/PokemonFichaPage/PokemonFichaPage.jsx'
+import ItemsListPage from './pages/ItemsListPage/ItemsListPage.jsx'
+import ItemFichaPage from './pages/ItemFichaPage/ItemFichaPage.jsx'
 import { LANGUAGES, useLanguage } from './contexts/LanguageContext.jsx'
 import { useTheme } from './contexts/ThemeContext.jsx'
 import styles from './App.module.css'
@@ -25,6 +27,9 @@ function App() {
         <div className={styles.links}>
           <NavLink to="/" end className={navLinkClassName}>
             {t('nav.pokemon')}
+          </NavLink>
+          <NavLink to="/objetos" className={navLinkClassName}>
+            {t('nav.items')}
           </NavLink>
           <NavLink to="/cache" className={navLinkClassName}>
             {t('nav.cache')}
@@ -68,6 +73,8 @@ function App() {
       <main className={styles.main}>
         <Routes>
           <Route path="/" element={<PokemonListPage />} />
+          <Route path="/objetos" element={<ItemsListPage />} />
+          <Route path="/objetos/:idOrName" element={<ItemFichaPage />} />
           <Route path="/cache" element={<CacheAllPage />} />
           <Route path="/status" element={<StatusPage />} />
           <Route path="/ficha/:idOrName" element={<PokemonFichaPage />} />

@@ -141,11 +141,54 @@
   color: #14171d;
 }
 
+.shinyToggle {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  display: flex;
+  gap: 0.25rem;
+  z-index: 1;
+}
+
+.shinyButton {
+  cursor: pointer;
+  width: 1.9rem;
+  height: 1.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 0.35rem;
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 1.05rem;
+  line-height: 1;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.shinyButton:hover {
+  color: #fff;
+}
+
+.shinyButtonActive {
+  background: rgba(255, 209, 0, 0.85);
+  color: #4d3800;
+}
+
+.decorationSelect {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  max-width: calc(100% - 1.5rem);
+  cursor: pointer;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 0.35rem;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 0.8rem;
+}
+
 .sprite {
-  /* El <canvas> del sprite animado reescribe sus atributos width/height cada frame
-     para que coincidan con la resolución nativa del vídeo (ver useChromaKeyVideo) —
-     sin un tamaño fijado aquí por CSS, ese buffer más grande desborda scanChamber y
-     se recorta en vez de escalarse. */
   width: 100%;
   height: 100%;
   object-fit: contain;
@@ -409,11 +452,21 @@
   font-size: 0.72rem;
   padding: 0.3rem 0.75rem;
   text-transform: capitalize;
-  transition: border-color 0.15s ease, color 0.15s ease;
+  opacity: 0.7;
+  transition: border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
 }
 
 .versionChip:hover {
   border-color: var(--signal);
+  opacity: 1;
+}
+
+/* Cartucho seleccionado: mismo criterio visual que .versionCoverActive de abajo —
+   opacidad plena + halo del color de tipo, para que el "cartucho" activo se lea de un
+   vistazo entre docenas de versiones. */
+.versionChipActive {
+  opacity: 1;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 30%, transparent);
 }
 
 .versionChip .tag {
@@ -433,11 +486,25 @@
   border-radius: 0.5rem;
   overflow: hidden;
   background: var(--chassis-900);
-  transition: border-color 0.15s ease, transform 0.15s ease;
+  opacity: 0.55;
+  filter: saturate(0.6);
+  transition: border-color 0.15s ease, transform 0.15s ease, opacity 0.15s ease, filter 0.15s ease;
 }
 
 .versionCover:hover {
   border-color: var(--signal);
+  transform: translateY(-2px);
+  opacity: 1;
+  filter: saturate(1);
+}
+
+/* Cartucho activo: como si estuviera insertado en la consola — a toda saturación,
+   con halo del color de tipo del Pokémon (vía boxShadow inline, ver JSX) en vez del
+   --signal genérico, para que el acento siga siendo "por Pokémon" como en el resto de
+   la ficha. */
+.versionCoverActive {
+  opacity: 1;
+  filter: saturate(1);
   transform: translateY(-2px);
 }
 
@@ -461,25 +528,151 @@
   border-radius: 0.25rem 0 0 0;
 }
 
+/* Pantalla de lectura estilo Pokédex: "terminal" con textura de escaneo (mismo patrón
+   que .heroBands::after, opacidad mucho más baja para no restar legibilidad al texto)
+   y un filo lateral con el color de tipo del Pokémon (--desc-accent, inline desde el
+   JSX) en vez del --signal genérico — ata visualmente esta pantalla al resto de la
+   ficha, donde cada Pokémon "tiñe" su propia UI. */
+.descPanel {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: color-mix(in srgb, var(--chassis-950) 92%, transparent);
+  padding: 1rem 1.4rem 1.3rem 1.6rem;
+  overflow: hidden;
+  box-shadow: 0 14px 30px -22px rgba(0, 0, 0, 0.5);
+}
+
+.descPanel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.03) 0,
+    rgba(255, 255, 255, 0.03) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  pointer-events: none;
+}
+
+.descPanel::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--desc-accent, var(--signal));
+}
+
+.descPanelHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.68rem;
+  color: var(--text);
+  margin-bottom: 0.75rem;
+}
+
+.descLed {
+  width: 0.45rem;
+  height: 0.45rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--desc-accent, var(--signal));
+  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--desc-accent, var(--signal)) 70%, transparent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .descLed {
+    animation: desc-blink 2.2s ease-in-out infinite;
+  }
+}
+
+@keyframes desc-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.descPanelVersion {
+  margin-left: auto;
+  color: var(--text-h);
+}
+
 .quote {
-  font-style: italic;
-  border-left: 2px solid var(--signal);
-  background: var(--chassis-900);
-  padding: 1rem 1.25rem;
-  border-radius: 0 0.4rem 0.4rem 0;
+  position: relative;
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 0.98rem;
+  line-height: 1.75;
   color: var(--text-h);
   max-width: 85ch;
-  box-shadow: 0 10px 24px -18px rgba(0, 0, 0, 0.4);
+  margin: 0;
+}
+
+.quote::before {
+  content: '> ';
+  color: var(--desc-accent, var(--signal));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .quote {
+    animation: desc-fade-in 0.3s ease;
+  }
+}
+
+@keyframes desc-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.cursor {
+  display: inline-block;
+  width: 0.5em;
+  height: 1em;
+  margin-left: 0.15em;
+  background: var(--desc-accent, var(--signal));
+  vertical-align: text-bottom;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cursor {
+    animation: desc-cursor-blink 1s steps(1) infinite;
+  }
+}
+
+@keyframes desc-cursor-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
 }
 
 .notTranslated {
   display: block;
-  font-style: normal;
   font-family: var(--font-mono);
   font-size: 0.72rem;
   color: var(--text);
   opacity: 0.7;
-  margin-top: 0.6rem;
+  margin-top: 0.7rem;
 }
 
 .evoList {
@@ -520,6 +713,10 @@
 }
 
 .evoConnector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   font-family: var(--font-mono);
   font-size: 0.72rem;
   text-transform: uppercase;
@@ -529,6 +726,21 @@
   padding: 0 1.1rem;
   position: relative;
   white-space: nowrap;
+}
+
+.evoMethodItem {
+  display: inline-flex;
+  background: var(--chassis-800);
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
+  padding: 0.15rem;
+}
+
+.evoMethodItem img {
+  display: block;
+  width: 1.75rem;
+  height: 1.75rem;
+  object-fit: contain;
 }
 
 .evoConnector::before {

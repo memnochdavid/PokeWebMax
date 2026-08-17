@@ -3,6 +3,8 @@
 namespace App\Service\PokeApi;
 
 use App\Repository\PokeApiResourceCacheRepository;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 
 /**
  * Listado específico de Pokémon — a diferencia de PokeApiListService (genérico por
@@ -25,9 +27,21 @@ class PokemonListService
     // mantener sincronizado si se añade uno ahí.
     private const SUPPORTED_LANGUAGES = ['es', 'en'];
 
+    // listAll() recorre el payload completo de las ~1350 filas de `pokemon` (¬132KB de
+    // media cada una, hasta 700KB en casos como Mew) para sacar tipos/peso/altura/
+    // stats — leer y parsear esa cantidad de JSON en el motor de la BD cuesta ~3,5s
+    // media independientemente de cuántos campos se pidan a la vez (medido: ver
+    // .claude/memory/project_pokewebmax_progress.md). No hay forma barata de evitar esa
+    // lectura en cada llamada sin columnas generadas + índice (cambio de esquema más
+    // grande), así que se cachea el resultado YA COMPUTADO en vez de la query. TTL
+    // corto a propósito: esta vista es la única forma de ver qué hay cacheado, así que
+    // una desactualización larga tras pulsar "cachear" en /cache se notaría.
+    private const LIST_CACHE_TTL_SECONDS = 300;
+
     public function __construct(
         private readonly PokeApiClient $pokeApiClient,
         private readonly PokeApiResourceCacheRepository $repository,
+        private readonly CacheInterface $cache,
     ) {
     }
 
@@ -62,21 +76,44 @@ class PokemonListService
      */
     public function listAll(): array
     {
+        return $this->cache->get(
+            'pokemon_list_all',
+            function (ItemInterface $item) {
+                $item->expiresAfter(self::LIST_CACHE_TTL_SECONDS);
+
+                return $this->computeListAll();
+            },
+        );
+    }
+
+    /**
+     * @return array<int, array{
+     *     id: int, name: string, cached: bool, fetchedAt: ?string, types: string[],
+     *     generation: ?int, legendary: bool, mythical: bool,
+     *     hasMega: bool, hasGmax: bool, hasRegional: bool, evolutionStages: ?int,
+     *     captureRate: ?int, weight: ?int, height: ?int, statsTotal: ?int,
+     *     variants: array<int, array{id: int, name: string, kind: string, types: string[]}>,
+     * }>
+     */
+    private function computeListAll(): array
+    {
         $entries = $this->pokeApiClient->fetchResourceList('pokemon-species');
         $cachedFetchedAt = $this->repository->findFetchedAtByType('pokemon-species');
-        $typesById = $this->repository->findPokemonTypesById();
+        // Tipos + peso/altura/stats en una sola pasada por `pokemon` (~1350 filas,
+        // ¬132KB de media cada una) en vez de dos por separado — ver el porqué en el
+        // docblock de findPokemonTypesAndMetricsById().
+        $typesAndMetricsById = $this->repository->findPokemonTypesAndMetricsById();
         $speciesSummaries = $this->repository->findSpeciesSummaries();
         $chainDepths = $this->repository->findEvolutionChainDepths();
-        $listMetrics = $this->repository->findPokemonListMetricsById();
 
         return array_map(
-            function (array $entry) use ($cachedFetchedAt, $typesById, $speciesSummaries, $chainDepths, $listMetrics) {
+            function (array $entry) use ($cachedFetchedAt, $typesAndMetricsById, $speciesSummaries, $chainDepths) {
                 $fetchedAt = $cachedFetchedAt[$entry['id']] ?? null;
                 $summary = $speciesSummaries[$entry['id']] ?? null;
                 $evolutionChainId = $summary['evolutionChainId'] ?? null;
-                $metrics = $listMetrics[$entry['id']] ?? null;
+                $metrics = $typesAndMetricsById[$entry['id']] ?? null;
                 $variants = array_map(
-                    static fn (array $variant) => $variant + ['types' => $typesById[$variant['id']] ?? []],
+                    static fn (array $variant) => $variant + ['types' => $typesAndMetricsById[$variant['id']]['types'] ?? []],
                     $summary['variants'] ?? [],
                 );
 
@@ -85,7 +122,7 @@ class PokemonListService
                     'name' => $entry['name'],
                     'cached' => $fetchedAt !== null,
                     'fetchedAt' => $fetchedAt?->format(DATE_ATOM),
-                    'types' => $typesById[$entry['id']] ?? [],
+                    'types' => $metrics['types'] ?? [],
                     'generation' => $summary['generation'] ?? null,
                     'legendary' => $summary['legendary'] ?? false,
                     'mythical' => $summary['mythical'] ?? false,
