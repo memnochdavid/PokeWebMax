@@ -1347,6 +1347,79 @@ construyó ningún importador para eso.
 errores. **No verificado a ojo en navegador** (sin `claude-in-chrome` en toda la
 sesión).
 
+## Coherencia de layout, bug de ficha, límite de memoria de Mew, rendimiento de listas, método de movimientos — HECHO 2026-08-17
+
+**Ancho de página inconsistente entre vistas**: `ItemsListPage`/`ItemFichaPage` no
+tenían `width: 100%` en `.page` — dentro del `.main` flex de `App.module.css`
+(`display: flex`, sin `align-items: stretch` explícito pero un flex item sin `width`
+propio no se estira al eje principal por defecto) el contenido se encogía a su
+contenido en vez de ocupar el ancho disponible (Objetos quedaba en dos columnas
+pegadas a la izquierda con medio viewport en blanco). Corregido añadiendo
+`padding`/`width: 100%` (Objetos, mismo criterio que `PokemonListPage`) y
+`max-width: 1900px` + `margin: 0 auto` + `width: 100%` (ficha de objeto, mismo valor
+que la ficha de Pokémon — ese 1900px ya se afinó a propósito en una ronda anterior,
+"reducir espacio libre a los lados", no tocar sin motivo).
+
+**Bug real: `PokemonFichaPage` petaba con "Cannot read properties of undefined
+(reading 'types')"** al navegar entre Pokémon (ej. por la cadena evolutiva).
+`usePokemonFicha` no reseteaba `ficha` a `null` al empezar a cargar un idOrName
+nuevo — solo cambiaba `status`. Doble fix: `load()` ahora limpia `ficha` en cuanto
+arranca la petición, y el guard de `PokemonFichaPage` pasó de `if (!ficha)` a
+`if (!ficha?.pokemon)` (defensa adicional, no depender solo de que `ficha` sea
+`null`).
+
+**Mew (y cualquier Pokémon con moveset enorme) daba 500** por agotar el
+`memory_limit` de PHP (128M por defecto) al montar el JSON de su ficha — el payload
+en bruto de `pokemon` de Mew son ~700KB (375 movimientos) frente a ~290KB de
+Bulbasaur, y con el profiler de Symfony en modo dev clonando la respuesta para el
+toolbar el límite por defecto no basta. Subido a 512M en `docker/backend.Dockerfile`
+(`CMD ["php", "-d", "memory_limit=512M", ...]`), reconstruida la imagen.
+
+**Listas lentas (`/api/pokemon` ~4-5s, `/api/items` ~0,8s) — causa real:
+`JSON_EXTRACT` no evita leer la columna `payload` completa por fila.** Medido con SQL
+directo: sacar `types` de las ~1350 filas de `pokemon` (¬132KB de media, hasta 700KB
+en Mew) cuesta ~1,5s; peso/altura/stats otros ~2,8s — el motor tiene que leer y
+parsear el TEXT/JSON entero de cada fila para el `JSON_EXTRACT` aunque el resultado
+que viaja a PHP sea pequeño. Dos fixes en `PokeApiResourceCacheRepository`/services:
+1. `findPokemonTypesAndMetricsById()` combina en una sola pasada lo que antes eran
+   dos consultas separadas sobre la misma tabla (`findPokemonTypesById` +
+   `findPokemonListMetricsById`, que siguen existiendo sueltas para quien solo
+   necesite una de las dos — `namesById()` sigue usando la de tipos sola).
+2. El verdadero salto de rendimiento: `PokemonListService::listAll()` y
+   `ItemListService::listAll()` cachean el resultado YA COMPUTADO con
+   `Symfony\Contracts\Cache\CacheInterface` (`cache.app`, TTL 300s) en vez de la
+   query — no hay forma barata de evitar la lectura cara sin columnas generadas +
+   índice (cambio de esquema mayor, no abordado). De paso,
+   `PokeApiClient::fetchResourceList()` (la lista maestra que pide a la PokeAPI real)
+   también se cachea, TTL 6h. **Ojo con dónde vive el pool**: `cache.app` en este
+   proyecto usa `var/share/{env}/pools`, NO `var/cache/{env}` — `bin/console
+   cache:clear` NO lo vacía (hace falta `cache:pool:clear cache.app`), así que un
+   cambio en la lógica cacheada puede tardar hasta el TTL en notarse tras un deploy.
+   Medido antes/después: `/api/pokemon` 4,5s → 0,03-0,08s en caliente; `/api/items`
+   0,75s → 0,03s.
+
+**Columna "Nivel" de la tabla de movimientos ahora es "Método"**: David señaló que
+solo mostraba el nivel, pero un movimiento puede venir por MT/MO, cría o tutor
+también, y que no hay iconos descargados de WikiDex para esto. Comprobado el
+proyecto Android de referencia (`Movimientos.kt`,
+`determineLearnIndicatorText`/`formatMoveLearnMethod`): tampoco usa iconos ahí, solo
+texto ("Nivel", "MT/MO", "Tutor", "Huevo") — mismo criterio seguido aquí en vez de
+buscar assets que no existen. `moveLevelLearned()` →
+`moveLearnMethod()` en `pokemonFicha.js`, devuelve `{method, level}` con prioridad
+Nivel > MT/MO > Tutor > Cría mirando TODOS los juegos donde aparece el movimiento
+(no solo el más reciente, para no perder "Nivel" si en algún juego antiguo se
+aprendía así). Nueva `moveLearnMethodName()` para la etiqueta ES/EN. El orden por
+defecto de la columna ahora agrupa por método (mismo orden de prioridad) y por nivel
+dentro del grupo Nivel.
+
+**Verificado**: todo por curl/SQL/node contra los contenedores en marcha (timings
+antes/después, resolución de método por movimiento con Bulbasaur, `pocket_name`/
+`taught_move` en las respuestas reales) y Vite/Symfony sin errores tras cada cambio.
+**No verificado a ojo en navegador** (sin `claude-in-chrome` en toda la sesión) — el
+propio bug de `PokemonFichaPage` lo reportó David tras verlo él mismo en el
+navegador, así que el resto de vistas (layout de Objetos, columna de movimientos)
+convendría que las mire también antes de darlas por buenas del todo.
+
 ## Pendiente / siguiente paso natural
 
 - No hay vistas de listado/detalle navegable para ningún recurso salvo Pokémon — el resto
@@ -1366,3 +1439,621 @@ sesión).
 - De `DexterWeb` (revisado esta sesión) queda por traer si se quiere: iconos SVG de tipo +
   `typeColors.js`, y el patrón de `PokeApiService` con parseo recursivo de cadena
   evolutiva + traducción por idioma, útil para cuando se aborde la "ficha completa".
+
+## Pase de estética sobre el panel de secciones de la ficha — HECHO 2026-08-18
+
+David compartió una captura (`/home/david/Escritorio/capturas/ficha.png`, Venusaur) y
+señaló que se veía "poco estético" — con las 7 secciones colapsadas por defecto (decisión
+explícita de David, ver más arriba), el lado derecho de la ficha era casi una pared en
+blanco: cada sección era solo un título de texto + una línea, flotando directamente sobre
+el fondo de la página, sin superficie ni jerarquía visual propias. El sistema de tokens
+(chasis-grafito/ámbar, Chakra Petch+IBM Plex, marco HUD) no se descartó ni se tocó —
+mismo criterio que la sesión del 16-08 sobre desktop/grid: David señaló un problema visual
+concreto, no pidió repensar la paleta.
+
+**Antes de tocar nada**: se instalaron los plugins `frontend-design`/`superdesign` en esta
+máquina (no estaban, ver [[project_pokewebmax_required_plugins]] — sí lo estaban en la
+máquina de la sesión que los pidió originalmente). **No llegaron a estar disponibles en
+esta sesión** (`Skill(frontend-design)` → `Unknown skill`, necesitan reinicio de sesión
+para que el harness los recoja, igual que advierte esa nota) — el rediseño de esta sesión
+se hizo a mano, aplicando el mismo criterio de proceso (construir sobre el sistema de
+tokens ya existente, no inventar uno nuevo) sin la skill formal. Quedan instalados para la
+próxima sesión en esta máquina.
+
+Cambios (todo en `PokemonFichaPage.jsx`/`.module.css` + `index.css`, sin tocar backend
+ni otras páginas):
+- **`.content` pasa a ser una superficie de tarjeta propia** (`background:
+  var(--chassis-900)`, borde, `border-radius`, sombra) en vez de secciones sueltas sobre
+  el fondo de la página — mismo lenguaje visual que `.hero`. Cada sección
+  (`.sectionBlock`) es ahora una fila dentro de ese panel con padding propio y un
+  divisor (`border-bottom`) entre secciones, sustituyendo el hueco de `2.75rem` que
+  antes separaba títulos sueltos.
+- **Icono por sección** (`SECTION_ICONS`, SVGs inline stroke-based, sin librería nueva —
+  mismo criterio que el resto del repo de no añadir dependencias) en un chip cuadrado
+  teñido con el color de tipo del Pokémon (`currentColor` heredado), tanto en la cabecera
+  de cada sección como en las pestañas de arriba (`.tabPills`) — antes las pestañas y
+  cabeceras eran solo texto plano.
+- **Subtítulo de una línea bajo cada título** (`sectionPreviews`, ej. "8 versiones", "6
+  habilidades", "Total 525"), visible tanto colapsada como abierta — mitiga que una
+  sección colapsada se vea "vacía": ahora una fila cerrada sigue comunicando algo sin
+  necesidad de abrirla. Nuevas claves i18n `ficha.preview*` en `locales/es.json`/
+  `en.json` (interpolación `{{count}}`/`{{value}}`, mismo patrón que `cacheBarMissing`
+  ya existente). `evolutionStages(evolutionChain, t)` se hoisteó a una variable
+  (`evoStagesList`) para no recalcularlo dos veces (preview + render de la lista).
+- **Cabecera de sección con estado hover** (`.sectionHeadingRow:hover`, fondo sutil) —
+  antes el único affordance de que la fila era clicable era `cursor:pointer`.
+- **Barra de pestañas (`.tabs`) con superficie propia** (fondo + borde + sombra +
+  `backdrop-filter`, `border-radius` a juego con el panel de abajo) — antes flotaba
+  directa sobre el fondo de la página con solo un `border-bottom`.
+- **Marco HUD (`hud-frame`, `index.css`) reforzado**: grosor de línea 2px→3px, inset
+  -8px→-10px, `opacity` 0.85→1, + `filter: drop-shadow(0 0 3px currentColor)` — no
+  quedaba claramente visible en la captura de David alrededor del sprite de cabecera,
+  se subió el contraste. Solo afecta a `.hud-frame::before`; la variante
+  `.hud-frame--hover` (usada en `PokemonCard`) sigue con su propia opacidad 0 por
+  defecto, sin cambios de comportamiento ahí.
+
+**Verificado**: Vite compila sin errores (`docker compose logs frontend`, tras los
+edits no aparece ningún error nuevo — sí había trazas de error viejas en el log de
+antes de esta sesión, de ediciones previas, no relacionadas), `/ficha/3` (Venusaur, el
+mismo Pokémon de la captura de David) devuelve 200 y el módulo `PokemonFichaPage.jsx`
+se sirve sin `PARSE_ERROR`. **No verificado a ojo en navegador** — mismo hueco de
+`claude-in-chrome` de toda la vida de este proyecto (se intentó de nuevo esta sesión,
+"extensión no conectada"). David debe revisar `http://localhost:5174/ficha/3` y dar
+feedback concreto sobre qué mantener/ajustar antes de replicar este patrón de "panel +
+iconos + preview" en otras páginas (`PokemonListPage`, `CacheAllPage`, `ItemFichaPage`
+no se tocaron en esta sesión).
+
+## Fusión de /status en /cache + tabla compacta de recursos — HECHO 2026-08-18
+
+Misma sesión, a continuación del pase de estética de la ficha. David pidió dos cosas
+sobre la vista de caché: **(1)** que `/cache` y `/status` (antes dos páginas y dos
+enlaces de nav separados) fueran una sola vista, **(2)** que la lista de 49 recursos
+dejara de ser una tarjeta apilada por recurso (mucho scroll) y pasara a una tabla
+compacta.
+
+- **`StatusPage.jsx`/`.module.css` eliminados** (dead code tras la fusión, no dejado
+  como shim) — su lógica (`useServiceHealth`, `StatusRow`) no se duplicó, se reusa tal
+  cual desde un `StatusStrip` nuevo dentro de `CacheAllPage.jsx`: los 3 `StatusRow`
+  (frontend/backend/BD) en fila (`styles.statusStrip`, flex-wrap) en vez de apilados en
+  un panel centrado aparte, más el botón de reintentar. `App.jsx` pierde la ruta
+  `/status` y el enlace de nav "ESTADO" — sin redirect de compatibilidad (app personal
+  de un solo usuario, no hacía falta). Claves i18n `nav.status`/`status.eyebrow`/
+  `status.title` eliminadas de `locales/es.json`/`en.json` por quedar sin uso; el resto
+  del namespace `status.*` (labels/valores de cada servicio) se sigue usando igual
+  desde `CacheAllPage`.
+- **`ResourceCacheRow` pasa de `<div>` apilado a `<tr>`** dentro de una `<table>` por
+  grupo (`RESOURCE_GROUPS` sigue igual, solo cambia el render): nombre del recurso,
+  estado (barra mini de progreso/✓ hecho/error, con el error truncado con ellipsis) y
+  botón compacto (`.miniButton`, versión más pequeña de `.button`) en 3 columnas. La
+  fila del botón maestro "Todo (49 recursos)" se dejó como estaba (tarjeta destacada,
+  no es parte de la tabla — sigue siendo la única acción "especial" de la página).
+  `.page` sube de `max-width: 34rem` a `52rem` para dar aire a las columnas de la
+  tabla. **No se tocó la lógica de cacheo** (`useCacheAllResource`, `useCacheEverything`,
+  `cacheAllPending`) — solo el marcado/CSS de cómo se pinta cada fila.
+
+**Verificado**: Vite compila sin errores tras los edits (`docker compose logs
+frontend`, sin trazas nuevas), `GET /api/health` sigue devolviendo `{backend:"ok",
+database:"ok"}` (usado por `useServiceHealth`), `/cache` devuelve 200, confirmado que
+`StatusPage.jsx` ya no existe ni en disco ni en el contenedor (`docker compose exec
+frontend ls`) y que pedirlo a Vite cae al fallback SPA (sirve `index.html`, no el
+módulo viejo) en vez de servir contenido obsoleto. **No verificado a ojo en
+navegador** — mismo hueco de `claude-in-chrome` de siempre.
+
+## Iconos de objeto rotos ("caramelos") — placeholder + diagnóstico, HECHO 2026-08-18
+
+David señaló que algunos objetos (caramelos) no mostraban icono. Investigado: la
+cadena de icono de un objeto es `itemIconUrl()` (mapa local derivado de WikiDex, ver
+[[project_pokewebmax_progress]] sección "Diseño final" y `scripts/build_item_icon_map.py`)
+→ si no está en ese mapa, cae al sprite que aloja el propio repo `PokeAPI/sprites` en
+GitHub. **~103 de los 2223 objetos no tienen icono en NINGUNO de los dos sitios**
+(confirmado con `curl` contra el repo de sprites, 404 en los casos probados): los ~81
+"caramelo de especie" (`bulbasaur-candy`, `charmander-candy`... — resultan ser de
+**Let's Go Pikachu/Eevee**, no de Pokémon GO como se pensó al principio, visto en el
+propio payload cacheado de `bulbasaur-candy`: `version_group:
+lets-go-pikachu-lets-go-eevee`) + `dynamax-candy` + ~21 "candy" de Aventuras Dinamax
+(`health-candy`/`mighty-candy`/`tough-candy`/`smart-candy`/`courage-candy`/
+`quick-candy`, con tiers ` `/`-l`/`-xl`) + `candy-jar`. **Comprobado contra el propio
+dump SQLite de WikiDex** (`scripts/wikidex_dump/wikidex.sqlite`, de David, offline —
+solo lectura de datos que él ya obtuvo, sin descargar nada nuevo) que no existe
+ninguna página con el título en español que da PokeAPI (`Caramelo Vigor`,
+`Caramelo Bulbasaur`...) — sí hay páginas parecidas pero de OTRA cosa distinta
+("Pluma Vigor", "Mochi Vigor", "Carga vigor S/M" parecen items de Pokémon Sleep/Legends
+Arceus, no de Aventuras Dinamax) — así que esto no es un bug de emparejamiento por
+nombre (`build_item_icon_map.py` solo empareja por igualdad exacta tras normalizar, a
+propósito, ver comentario del propio script) sino un hueco real: **o WikiDex no tiene
+página propia para estos ~103 objetos con ese título exacto, o existe bajo un título
+que no se ha localizado todavía.** No se ha intentado tirar de ese hilo más a fondo
+(sería trabajo de investigación en la wiki, no algo que resolver desde este repo) ni
+se ha descargado ninguna imagen nueva — sigue aplicando la misma línea de siempre
+(sprites HOME/animados, ver más arriba): **si David quiere completar estos iconos
+tendría que localizar él mismo los títulos/URLs reales en WikiDex y añadirlos a
+`scripts/links.txt`**, Claude no descarga assets nuevos de wikidex.net.
+
+**Mitigación aplicada mientras tanto** (sí es código, no descarga de assets): antes,
+cuando fallaban AMBOS niveles de `useImageFallback` (local y el remoto de PokeAPI), el
+`<img>` se quedaba con el icono roto del navegador. Se añadió un tercer estado
+`exhausted` al hook (`hooks/useImageFallback.js`) — cuando se agotan los dos
+fallbacks, `ItemCard`/`ItemFichaPage` pintan un placeholder propio (icono de caja
+genérica en SVG inline, mismo criterio que los iconos de sección de la ficha de
+Pokémon, sin librería nueva) en vez del `<img>` roto. Cambio retrocompatible: el resto
+de consumidores del hook (`PokemonHeroSprite`, `PokemonCard`, cabecera de
+`PokemonFichaPage`) ignoran el campo nuevo y siguen funcionando igual.
+
+**Verificado**: Vite compila sin errores tras los edits, `/objetos` y
+`/objetos/bulbasaur-candy` devuelven 200, `GET /api/items/bulbasaur-candy/ficha`
+confirma el `version_group` que aclaró el origen real de estos objetos (Let's Go, no
+GO). **No verificado a ojo en navegador** — mismo hueco de `claude-in-chrome` de
+siempre; David debería comprobar en `/objetos` que los caramelos afectados ahora
+muestran el placeholder (caja gris translúcida) en vez de un icono roto.
+
+### Bug real en el placeholder de arriba, encontrado con captura — arreglado 2026-08-18
+
+David mandó `/home/david/Escritorio/capturas/a.png` (buscador de objetos filtrado por
+"caram") y el placeholder de la sección anterior **no se veía** — seguía saliendo el
+icono roto del navegador con el `alt` desbordando por encima de la tarjeta. Causa
+raíz: `itemIconUrl(slug)` (`utils/itemSprite.js`) YA hace su propio fallback interno a
+la url remota de PokeAPI cuando el objeto no está en el mapa local — así que para
+~1166 objetos (todo lo no mapeado, incluidos los ~103 "caramelo") `ItemCard`/
+`ItemFichaPage` llamaban a `useImageFallback(primarySrc, fallbackSrc)` con
+`primarySrc === fallbackSrc` (la misma url remota repetida dos veces). Al fallar esa
+única url, el hook cambiaba a "modo fallback" pero reasignaba el `<img src>` al mismo
+string que ya tenía — un `src` sin cambiar no dispara un `onError` nuevo en el
+navegador, así que `fallbackFailed` nunca llegaba a `true` y `exhausted` se quedaba
+atascado en `false` para siempre. El placeholder de la sesión anterior nunca llegaba a
+activarse en la práctica para ningún objeto sin mapeo local (que es precisamente el
+caso más común de "objeto sin icono").
+
+Arreglado en `hooks/useImageFallback.js`: si `primarySrc === fallbackSrc` (o no hay
+`primarySrc`), el hook entra en "modo fallback" desde el primer render en vez de
+esperar un primer fallo que nunca reasignaría nada — así solo hace falta UN intento de
+carga fallido (no dos) para marcar `exhausted`. Resto de consumidores del hook
+(`PokemonCard`, `PokemonHeroSprite`, cabecera de ficha) no se ven afectados: sus dos
+urls sí son siempre distintas entre sí, así que su comportamiento (probar la local,
+caer a la remota si falla) no cambia.
+
+**Verificado**: Vite compila sin errores tras el fix. **Seguimos sin poder verlo a
+ojo en navegador** (mismo hueco de `claude-in-chrome`) — esta vez el bug se encontró
+gracias a que David SÍ pudo mandar una captura real con el síntoma, así que merece la
+pena que confirme de nuevo en `/objetos?buscar=caram` (o el filtro que use) que ahora
+sale el placeholder de caja en vez del icono roto.
+
+## Ancho de las fichas igualado al resto de vistas + hero fluido — HECHO 2026-08-18
+
+David pidió que `/ficha/:id` (y por extensión `/objetos/:id`) aprovechara el mismo
+ancho horizontal que las vistas de lista, y que se ajustara también el tamaño del
+hero. Causa: `PokemonFichaPage.module.css`/`ItemFichaPage.module.css` tenían
+`.page { max-width: 1900px; margin: 0 auto }`, mientras que `PokemonListPage`/
+`ItemsListPage` no tienen `max-width` (solo `width: 100%`) — en pantallas más anchas
+que 1900px (la de David es de 2547px, ver capturas de esta sesión) la ficha se veía
+más estrecha que la lista de la que se venía navegando.
+
+- **`.page` de ambas fichas**: quitado el `max-width: 1900px` — mismo criterio que las
+  listas, sin tope propio.
+- **`.layout` (columna del hero en `PokemonFichaPage`)**: de `grid-template-columns:
+  420px 1fr` fijo a `clamp(380px, 25vw, 560px) 1fr` — al quitar el tope de `.page`,
+  dejar el hero a un ancho fijo lo habría hecho ver cada vez más pequeño en relación
+  al resto de la página en pantallas anchas.
+- **`.scanChamber` (marco del sprite) fluido de verdad**: de `21rem` fijos a `width:
+  78%; aspect-ratio: 1` (relativo a `.heroBands`, que a su vez hereda el ancho de la
+  columna del hero) — crece con la columna en vez de quedarse fijo dentro de una
+  tarjeta cada vez más grande. `.heroBands` pasa de `height: 27rem` fijo a
+  `clamp(27rem, 30vw, 36rem)` para que siempre quepa el cuadrado de `.scanChamber` sin
+  recortarlo (`overflow: hidden` en `.heroBands`) en ningún punto del rango.
+- **`ItemFichaPage`**: mismo quitado de `max-width`; `.iconWrap` (icono del objeto en
+  la cabecera) subido de `6.5rem` a `8rem` — su hero es una fila simple icono+texto,
+  no una rejilla de dos columnas como el de Pokémon, así que no necesitaba una
+  solución fluida, solo un tamaño algo mayor acorde a la página más ancha.
+
+**Verificado**: Vite compila sin errores (`docker compose logs frontend`), `/ficha/3`
+y `/objetos/rare-candy` devuelven 200. **No verificado a ojo en navegador** — mismo
+hueco de `claude-in-chrome` de siempre; David debería confirmar en su pantalla ancha
+que la ficha ya llega al mismo borde que `/pokemon`/`/objetos` y que el hero se ve
+proporcionado (ni enano ni desbordado) en ese ancho.
+
+## Scroll interno de .content + acordeón de una sola sección — HECHO 2026-08-18
+
+David pidió dos cambios más sobre la ficha: **(1)** que el scroll fuera interno a
+`.content` (el panel de las 7 secciones) en vez de la página entera, y **(2)** que
+solo una sección pudiera estar desplegada a la vez (antes cada una tenía su propio
+estado independiente en un `Set`, así que David podía tener DESC+STATS+MOVES abiertas
+a la vez, lo que era justo lo que hacía crecer la página sin límite).
+
+- **Acordeón de una sola sección**: `collapsedSections` (`Set` de claves colapsadas,
+  todas colapsadas por defecto) sustituido por `openSection` (clave abierta o `null`,
+  sigue arrancando en `null` = todo colapsado, mismo comportamiento por defecto de
+  siempre). `toggleCollapse(key)` ahora es `setOpenSection(prev => prev === key ? null
+  : key)` — abrir una cierra automáticamente cualquier otra. `expandSection(key)` (la
+  usa `scrollToSection` al pulsar una pestaña de arriba) pasa a `setOpenSection(key)`
+  sin condición. `SectionHeading` recibe `openSection` en vez de `collapsed` (Set) y
+  compara `sectionKey !== openSection`. `statsAnimated` (dispara el crecimiento del
+  radar de stats) pasa de `!collapsedSections.has('STATS')` a `openSection ===
+  'STATS'`. Se resetea a `null` en el mismo `useEffect` que ya reseteaba el colapso al
+  cambiar de ficha (`[idOrName]`).
+- **Scroll interno**: `.content` (`PokemonFichaPage.module.css`) gana `max-height:
+  calc(100vh - 12rem)` + `overflow-y: auto` (antes `overflow: hidden` sin límite de
+  alto, la página entera crecía). El presupuesto de `12rem` es una estimación
+  generosa del nav de la app + la barra de pestañas sticky + el hueco entre ambas, no
+  un cálculo exacto — **David debería confirmar visualmente y avisar si sobra o falta
+  espacio**, es el típico ajuste que no se puede verificar sin navegador. En móvil
+  (`@media max-width:900px`, donde el hero deja de ser sticky y las pestañas dejan de
+  ser anclas) se desactiva el tope (`max-height:none; overflow:visible`) — un scroll
+  anidado se siente peor que el scroll de página normal en touch. `scroll-margin-top`
+  de `.sectionBlock` bajado de `7.5rem` a `0.5rem`: compensaba el nav+pestañas sticky
+  del scroll de página entera, que ya no aplica dentro del scroll interno de
+  `.content`. `scrollIntoView` (usado por `scrollToSection` al pulsar una pestaña)
+  sigue funcionando igual sin cambios de JS — por spec, scrolla el ancestro
+  desplazable más cercano, que ahora es `.content` en vez del documento.
+
+**Verificado**: Vite compila sin errores tras los edits (`docker compose logs
+frontend`), `/ficha/3` devuelve 200, grep confirma que no queda ningún resto de la
+API antigua (`collapsedSections`/`.has(...)` sobre secciones — el único `.has()` que
+queda en el fichero es el de `expandedMoves`, que es un `Set` aparte para las filas de
+movimiento expandidas, no tocado). **No verificado a ojo en navegador** — mismo hueco
+de `claude-in-chrome` de siempre; el ajuste de `12rem` en particular necesita
+confirmación visual de David.
+
+**Bug encontrado por David tras probarlo**: la sección MOVES tenía su propio scroll
+interno acotado (`.moveTableWrap { max-height: 30rem; overflow-y: auto }`, de la
+sesión del rediseño a tabla) — con `.content` ahora también scrollando internamente,
+al abrir Movimientos salían DOS scrollbars anidadas. Arreglado quitando el
+`max-height`/`overflow-y` de `.moveTableWrap` (se deja `overflow-x: auto`, sigue
+haciendo falta en pantallas estrechas porque la tabla no envuelve columnas) — el
+scroll vertical de la tabla larga lo absorbe `.content` directamente, una sola
+scrollbar. De paso, `.moveTable th` (cabecera sticky de la tabla) pasó de
+`background: var(--bg)` (fondo de página) a `var(--chassis-900)` (fondo real de
+`.content`, el ancestro scrollable del que depende ahora el sticky) — antes se veía
+una costura de color al quedar pegada arriba con las filas pasando debajo.
+
+**Verificado**: Vite compila sin errores tras el fix. **No verificado a ojo en
+navegador** — David debería confirmar que al abrir Movimientos ya solo hay una
+scrollbar y que la cabecera de la tabla al pegarse arriba no tiene ningún salto de
+color visible.
+
+## Hero a todo el alto disponible — HECHO 2026-08-18
+
+David pidió que el hero (columna izquierda, tarjeta con el sprite) ocupe todo el alto
+vertical que pueda, en vez de quedarse con el alto que le pidieran sus contenidos
+internos (que podía acabar más corto que `.content`, sobre todo en pantallas altas).
+
+- **Variable compartida `--panel-h`** definida en `.layout` (`calc(100vh - 12rem)`,
+  el mismo presupuesto que ya usaba `.content` para su scroll interno de la sección
+  anterior) — evita que `.hero` y `.content` se desincronicen si se retoca uno de los
+  dos números sueltos más adelante.
+- **`.hero`**: gana `height: var(--panel-h)` (antes el alto lo determinaba solo el
+  flex-column de dentro).
+- **`.heroBands`** (la banda de color con el sprite): de `height: clamp(27rem, 30vw,
+  36rem)` fijo a `flex: 1; min-height: 0` — absorbe todo el alto que `.hero` tenga de
+  sobra tras `.infoBand` (la banda inferior con nombre/número, que no cambió). El
+  sprite (`.scanChamber`) sigue acotado por ANCHO (78% de `.heroBands`, `aspect-
+  ratio:1`, ver sesión del ajuste de ancho más arriba), así que en pantallas altas el
+  hueco extra se reparte como aire por encima del sprite en vez de deformarlo — sigue
+  anclado abajo (`align-items: flex-end`).
+- **Móvil** (`@media max-width:900px`, donde `.hero` ya volvía a `position: static`):
+  `.hero` gana `height: auto` y `.heroBands` vuelve a su `flex: none; height:
+  clamp(27rem, 30vw, 36rem)` fijo de antes — sin alto de sobra que repartir en una
+  columna apilada, se restauró el tamaño que ya se sabía que funcionaba ahí.
+
+**Verificado**: Vite compila sin errores tras los edits. **No verificado a ojo en
+navegador** — mismo hueco de `claude-in-chrome` de siempre; David debería confirmar
+que el hero ahora llega hasta abajo del todo emparejado con `.content` y que en móvil
+no cambió nada visualmente.
+
+## Sección abierta sube arriba, animado (FLIP) — HECHO 2026-08-18
+
+David pidió que la sección seleccionada (abierta) pase a estar arriba del todo,
+dejando el resto debajo, con la transición animada — sobre el acordeón de sección
+única de la sesión anterior.
+
+- **Reordenamiento visual vía `order` de flexbox**, no reordenando el JSX: cada
+  `<section>` sigue en su sitio de siempre en el árbol (son bloques grandes, con
+  bastante contenido propio cada uno — desmontar/remontar habría sido más caro y más
+  frágil), pero gana `style={{ order: sectionOrder(key, openSection) }}`.
+  `sectionOrder()` devuelve `-1` para la sección abierta (primera) y el índice natural
+  (`SECTION_ORDER_INDEX`, orden de `FICHA_SECTIONS`) para el resto, que mantienen su
+  orden relativo de siempre detrás.
+- **Animación con la técnica FLIP** (First, Last, Invert, Play), hook nuevo
+  `hooks/useSectionReorderFlip.js`: expone `capture()` (llamado a mano justo ANTES de
+  cambiar `openSection`, dentro de `toggleCollapse`/`expandSection` — un hook no puede
+  interceptar el instante justo antes de un cambio de estado que él mismo no dispara)
+  que guarda el `getBoundingClientRect()` de las 7 secciones; en un `useLayoutEffect`
+  disparado por el cambio de `openSection` compara esas posiciones contra las nuevas
+  (ya con el `order` aplicado) y anima cada una con `Element.animate()` (Web
+  Animations API nativa, sin librería nueva — mismo criterio que
+  `useChromaKeyVideo.js`) desde su delta de posición vieja hasta 0. Se salta
+  elementos con rect `0×0` (secciones ocultas en móvil vía `.sectionInactiveMobile`,
+  nada que animar ahí).
+- **`sectionRefs` (antes declarado más abajo, junto a `scrollToSection`) se subió
+  arriba del todo del cuerpo del componente** — tanto el hook de FLIP como
+  `scrollToSection` lo necesitan, y en JS hay que declararlo antes de usarlo.
+- **Bug encontrado y arreglado de paso, antes de que llegara a verse**: el borde
+  inferior de cada fila usaba `.sectionBlock:last-child` para no dibujarse en la
+  última — pero `:last-child` mira la posición real en el DOM, no el `order` visual
+  de CSS. Con el reordenamiento, en el único caso en que la sección abierta es FORM
+  (la última natural) el borde habría quedado mal puesto (en FORM, que pasa a ser la
+  PRIMERA visualmente, en vez de en la que de verdad queda última). Arreglado con
+  `sectionBlockClassName()` (calcula a mano cuál es la última visual filtrando
+  `FICHA_SECTIONS` por la abierta) + clase `.sectionBlockLast` en vez de
+  `:last-child`.
+
+**Verificado**: Vite compila sin errores (probado también con `docker compose
+restart frontend` para descartar un error transitorio de HMR a media edición —
+limpio tras el reinicio), módulo del hook nuevo y de la página sirven 200. **No
+verificado a ojo en navegador** — mismo hueco de `claude-in-chrome` de siempre; la
+animación en sí (timing, si se nota "viva" o demasiado brusca/lenta a 350ms) es
+justo el tipo de ajuste que necesita que David lo vea y dé feedback, no se puede
+calibrar a ciegas.
+
+### Corrección: hero debe medir EXACTAMENTE lo mismo que .main — HECHO 2026-08-18
+
+David afinó el pedido de "hero a todo el alto disponible" de la sesión anterior: la
+altura del hero debe ser la MISMA que la altura máxima de `.main` (columna derecha:
+`.tabs` + `.content`), no una estimación de viewport aparte que podía quedarse corta.
+Causa del desajuste anterior: `.hero` tenía `height: var(--panel-h)` pero esa
+variable solo cubría el presupuesto de `.content`, sin sumar el alto real de `.tabs` +
+el gap entre ambos — así que `.main` en su punto más alto (`.tabs` + `.content` a su
+`max-height`) acababa siendo más alto que `.hero`, no coincidían.
+
+Rediseño para que coincidan por construcción, sin dos cálculos que sincronizar a
+mano:
+- **`.main` gana `height: var(--panel-h)` explícito** (antes su alto era solo la suma
+  natural de `.tabs` + `.content`, sin tope ni mínimo propios) — ahora es SIEMPRE
+  exactamente `var(--panel-h)`, la misma variable que ya usaba `.hero`.
+- **`.content` pasa de `max-height: var(--panel-h)` a `flex: 1; min-height: 0`** —
+  como ahora vive dentro de un `.main` de alto fijo (flex-column), reparte
+  automáticamente "lo que sobre tras `.tabs`", sea cual sea el alto real de `.tabs`
+  (puede pasar a dos líneas en viewports estrechos) — ya no hace falta adivinar ese
+  número, antes `--panel-h` restaba una estimación fija (`12rem`) que intentaba cubrir
+  nav + pestañas + hueco a ojo.
+- **`--panel-h` bajó de `calc(100vh - 12rem)` a `calc(100vh - 8rem)`** — ya no hay que
+  restar el alto de `.tabs` dos veces (antes se restaba una vez dentro de `--panel-h`
+  para `.content`, y `.main` sumaba `.tabs` por encima sin tope, así que `.main`
+  acababa más alto que ese presupuesto). Ahora `--panel-h` es el presupuesto total de
+  la fila hero/main (nav + padding de página), y `.tabs`/`.content` se lo reparten
+  solos dentro de `.main`.
+- **Móvil**: `.main` gana `height: auto` en el breakpoint existente (`.hero` ya volvía
+  a `height: auto` ahí) y `.content` pasa de `max-height:none` a `flex: none` (ya no
+  hay `max-height` que anular, ahora es `flex: 1` lo que se desactiva).
+
+**Verificado**: Vite compila sin errores tras los edits. **No verificado a ojo en
+navegador** — mismo hueco de `claude-in-chrome` de siempre; el ajuste de `8rem` en
+`--panel-h` es una estimación (nav + padding de página) que David debería confirmar,
+igual que el `12rem` anterior lo fue.
+
+### Deshecho el reordenamiento — solo scroll interno hacia la cabecera — HECHO 2026-08-18
+
+David probó el reordenamiento animado (sección abierta sube al principio, ver sección
+anterior) y pidió deshacerlo: en vez de mover la sección visualmente, que sea el
+scroll interno de `.content` el que se desplace para dejar la cabecera de la sección
+recién abierta arriba del todo — más simple y menos "movido" que reordenar cards.
+
+- **Revertido por completo**: `style={{ order: ... }}` en los 7 `<section>`,
+  `sectionOrder()`/`SECTION_ORDER_INDEX`/`sectionBlockClassName()` (vuelto a la
+  `sectionClassName()` simple de antes), el hook `useSectionReorderFlip` (import +
+  usos) y el propio fichero `hooks/useSectionReorderFlip.js` — **borrado**, no
+  quedaba ningún otro importador (grep confirmado antes de borrar). CSS:
+  `.sectionBlockLast` vuelto a `.sectionBlock:last-child` (ya vale otra vez, sin
+  reordenamiento el DOM y el orden visual vuelven a coincidir).
+- **Nuevo**: `scrollSectionIntoView(sectionRefs, key)` (función de módulo, no hook —
+  no guarda estado propio, solo dispara un `scrollIntoView` con guarda de escritorio
+  `matchMedia('min-width:901px')`, igual que ya hacía `scrollToSection` para las
+  pestañas de arriba). Ahora se llama desde **ambos** sitios donde se abre una
+  sección: `toggleCollapse` (clic en la propia cabecera de una sección — antes no
+  scrolleaba nada al abrir así, solo colapsaba/expandía in situ) Y `expandSection`
+  (usado por `scrollToSection`, clic en pestaña de arriba — antes tenía su propio
+  bloque de scroll duplicado, ahora factorizado en la función compartida). En
+  `toggleCollapse` el scroll solo se dispara si se está ABRIENDO (no al cerrar,
+  comprobado con `openSection !== key` antes del `setOpenSection`).
+
+**Verificado**: `docker compose restart frontend` limpio, sin errores; módulo de la
+página sirve 200, confirmado por grep que no queda ninguna referencia a
+`useSectionReorderFlip`/`sectionOrder`/`sectionBlockClassName` en el JSX. **No
+verificado a ojo en navegador** — mismo hueco de `claude-in-chrome` de siempre.
+
+### Bug encontrado por David: hacía falta un segundo clic — HECHO 2026-08-18
+
+Al pulsar la pestaña de una sección (ej. Movimientos) con OTRA sección ya abierta, la
+nueva se desplegaba pero el scroll interno no dejaba su cabecera arriba hasta un
+segundo clic. Causa: `scrollSectionIntoView` usaba un único `requestAnimationFrame`
+antes de calcular `scrollIntoView` — pero al abrir una sección con el acordeón de una
+sola, la que estaba abierta antes se colapsa a la vez, y ese colapso anima
+`grid-template-rows` durante 250ms (`.collapseWrap`, ver CSS), desplazando hacia
+arriba todo lo que esté debajo mientras se encoge. Un frame (~16ms) capturaba la
+posición de la sección objetivo ANTES de que ese desplazamiento terminara, así que el
+scroll quedaba corto — el segundo clic "acertaba" porque para entonces ya no había
+nada más animando.
+
+Arreglado cambiando el `requestAnimationFrame` por un `setTimeout(…,
+COLLAPSE_TRANSITION_MS + 20)` (270ms, la duración real de la transición de
+`.collapseWrap` + margen) — se espera a que la animación de colapso de la sección
+anterior termine del todo antes de calcular dónde scrollear. `COLLAPSE_TRANSITION_MS`
+queda como constante junto a la función, con una nota de que debe coincidir con el
+`0.25s` fijado en el CSS si algún día se cambia ahí.
+
+**Verificado**: Vite compila sin errores tras el fix. **No verificado a ojo en
+navegador** — mismo hueco de `claude-in-chrome` de siempre; el retraso de 270ms podría
+notarse como un pelín lento si David lo ve demasiado perezoso, es un ajuste que
+también necesita su confirmación visual.
+
+### Scroll externo colándose — rediseño a alto exacto (sin estimaciones) — HECHO 2026-08-18
+
+David detectó que seguía habiendo scroll de página entera (externo), pese a que el
+objetivo de varias sesiones seguidas era que el único scroll fuera el interno de
+`.content`. Causa raíz: `--panel-h: calc(100vh - 8rem)` era una ESTIMACIÓN del hueco
+de nav+padding, pero no contaba el alto real de `.cacheBar` (el aviso de "faltan
+recursos por cachear", que aparece/desaparece según el Pokémon) — cuando aparecía,
+sumaba altura por encima de esa estimación y la página se pasaba de 100vh, colando
+scroll externo. Cada ajuste anterior de este número (`12rem` → `8rem`) fue puro tanteo
+sin poder verificar a ojo — la causa real nunca era el número en sí, era que el
+enfoque (restar una cifra fija) no podía contemplar un elemento de alto variable
+como `.cacheBar`.
+
+**Rediseño para que el navegador calcule el alto exacto, sin estimaciones que
+mantener**:
+- **`.page` acotada de verdad**: `height: calc(100vh - 4.1rem)` (el mismo valor que
+  ya usaban `.tabs`/`.hero` para su propio sticky top, asumiendo esa altura de nav) +
+  `overflow: hidden` — ahora NINGUNA combinación de contenido puede producir scroll de
+  página entera, se recorta en vez de desbordar (red de seguridad; en condiciones
+  normales nada debería llegar a desbordar, dado el resto de la cadena de abajo).
+- **`.layout` pasa de restar su propio presupuesto a `flex: 1; min-height: 0`** dentro
+  de esa altura ya exacta de `.page` — reparte automáticamente "lo que sobre tras
+  `.cacheBar`" (si aparece), sin adivinar su alto.
+- **`.hero`/`.main` pasan de `height: var(--panel-h)` (una cifra calculada aparte) a
+  `height: 100%`** — toman el alto real de la fila de `.layout` (`align-items:
+  stretch`, ya el valor por defecto pero dejado explícito), que a su vez ya es exacto
+  gracias al punto anterior. Los dos miden literalmente lo mismo porque comparten el
+  mismo `100%` del mismo contenedor, no dos números que puedan desincronizarse.
+- **`.content` sin cambios de fondo** (`flex: 1; min-height: 0; overflow-y: auto`),
+  solo se actualizaron los comentarios que mencionaban `var(--panel-h)` (ya no existe).
+- **Móvil** (`@media max-width:900px`): `.page` vuelve a `height:auto;
+  overflow:visible` y `.layout` a `flex:none` — mismo criterio que ya tenían
+  `.hero`/`.main`/`.content` ahí (scroll de página normal, sin nada acotado).
+
+**Por qué este enfoque es más robusto que seguir ajustando la cifra**: antes había
+UNA estimación (nav+padding+margen) que además tenía que adivinar el alto de
+`.cacheBar`, un elemento condicional. Ahora solo queda UN número fijo en todo el
+sistema (`4.1rem`, el alto del nav — estable, no cambia con el contenido de la
+ficha) y todo lo demás (`.cacheBar`, `.tabs`, el propio `.content`) se resuelve con
+aritmética real de flexbox en tiempo de layout, no con más cifras a mano.
+
+**Verificado**: Vite compila sin errores tras los edits, grep confirma que no queda
+ninguna referencia a `--panel-h`/`var(--panel-h)` en el CSS. **No verificado a ojo en
+navegador** — mismo hueco de `claude-in-chrome` de siempre. El único número que queda
+por confirmar es si `4.1rem` reproduce de verdad el alto real del nav en la pantalla
+de David (viene de un valor ya asumido por `.tabs`/`.hero` en sesiones anteriores, no
+medido con `claude-in-chrome` tampoco) — si aún queda un pelín de scroll externo, ese
+es el sitio a mirar primero.
+
+### Dos bugs vistos en captura tras el rediseño de alto — HECHO 2026-08-18
+
+David mandó otra captura (`/home/david/Escritorio/capturas/a.png`, Magneton) del
+resultado del ajuste anterior. Dos problemas visibles:
+
+1. **`.hero` se estiraba pero `.content` no** — quedaba un hueco grande de fondo de
+   página bajo el panel de secciones mientras el hero llegaba hasta abajo del todo.
+   Causa: `.layout` es un grid con una sola fila IMPLÍCITA (`grid-auto-rows: auto` por
+   defecto, sin `grid-template-rows` propio) — pese a que `.layout` ya tenía un alto
+   definido (`flex: 1` dentro de `.page`, acotada al viewport), una fila implícita
+   `auto` no se estira automáticamente para rellenar ese alto en todos los navegadores/
+   casos de forma fiable — el hero (con más contenido "denso" en su alto natural) sí
+   acababa ocupando el hueco vía su propio `height: 100%`, pero `.main` no siempre lo
+   hacía a la par. Arreglado con `grid-template-rows: 1fr` explícito en `.layout` —
+   fuerza la fila única a ocupar el 100% del alto ya definido, sin depender del
+   comportamiento por defecto de filas `auto`. Con eso, `height: 100%` en `.hero`/
+   `.main` (que ya estaba) por fin resuelve contra un alto de fila inequívoco. Reset a
+   `grid-template-rows: none` en el breakpoint móvil (ahí `.layout` pasa a dos filas
+   apiladas, no una sola que rellenar).
+2. **La pestaña resaltada arriba no coincidía con la sección realmente desplegada**
+   (captura: pestaña "Evolución" en naranja pero la que se veía con contenido abierto
+   era "Descripción"). Causa: el resaltado de pestaña usaba `section` (el estado del
+   scrollspy vía `IntersectionObserver`, pensado para cuando el scroll de página
+   entera pasaba por todas las secciones apiladas) en vez de `openSection` (el
+   acordeón). Con el diseño actual (una sola sección abierta + scroll interno que la
+   deja arriba al abrirla), en cuanto se scrollea dentro de una sección larga el
+   observer puede detectar la cabecera de la SIGUIENTE sección (todavía colapsada)
+   entrando en su banda de activación y mover el resaltado ahí, aunque la abierta
+   siga siendo la anterior. Arreglado cambiando el cálculo de `active` en las
+   pestañas de `section === key` a `openSection === key` — el resaltado ahora sigue
+   directamente al acordeón, no a una heurística de scroll pensada para un diseño
+   anterior. `section`/el `IntersectionObserver` no se tocaron más allá de esto: siguen
+   haciendo falta para la conmutación de vista en móvil (`.sectionInactiveMobile`,
+   qué sección se MUESTRA ahí, un problema distinto del resaltado de pestaña en
+   escritorio).
+
+**Verificado**: Vite compila sin errores tras ambos fixes, probado contra `/ficha/82`
+(Magneton, el mismo Pokémon de la captura de David). **No verificado a ojo en
+navegador** — mismo hueco de `claude-in-chrome` de siempre.
+
+### David reportó que seguía igual + `.tabs` solapando `.content` — HECHO 2026-08-18
+
+David insistió en que la captura seguía igual tras el fix anterior y añadió un bug
+nuevo: `.tabs` se veía por ENCIMA de `.content` (solapados). Antes de tocar nada,
+Claude verificó algo concreto en vez de asumir: David pegó el `view-source` completo
+de la página, y el `<style data-vite-dev-id=".../PokemonFichaPage.module.css">` que
+su navegador tenía cargado **ya incluía** el fix anterior (`grid-template-rows: 1fr`,
+`height: 100%` en `.hero`/`.main`) — descartado que fuera un problema de HMR
+desincronizado, el navegador sí tenía la CSS nueva.
+
+**Diagnóstico y arreglo**: sospecha directa sobre `position: sticky` en `.tabs`
+(`top: 4.1rem`) y `.hero` (`top: 5.5rem`) — ambos calibrados para una época en la que
+la página SÍ hacía scroll completo; con el rediseño a "scroll solo interno en
+`.content`" (sesión anterior) esos offsets ya no tenían un contexto de scroll real al
+que engancharse (`.page` tiene `overflow: hidden` pero nunca se scrollea de verdad), y
+es un patrón clásico de bug de `position: sticky` que un elemento acabe
+mal-posicionado/solapado cuando su ancestro de scroll de referencia deja de coincidir
+con el que tenía en mente el offset. **Quitado `position: sticky`/`top`/`z-index` de
+ambos** — ya no aportan nada (nada hace scroll a su alrededor) y eran el principal
+sospechoso del solape. `.tabs` gana `flex-shrink: 0` (nunca debe encogerse, es
+`.content` quien debe absorber cualquier apretón de espacio). De paso, `.hero`/`.main`
+ganan `min-height: 0` (les faltaba — un grid item sin esto puede forzar la fila a
+crecer más de lo que pide `1fr` por el tamaño mínimo automático de su contenido,
+sospecha secundaria).
+
+**Lo que NO se tocó**: el `position: sticky` de `.moveTable th` (cabecera de la tabla
+de Movimientos) se dejó igual — ese sí sigue siendo válido, `.content` es un ancestro
+de scroll REAL (`overflow-y: auto` de verdad), no como `.page`.
+
+**Verificado**: Vite compila sin errores, grep confirma que solo queda un
+`position: sticky` en todo el fichero (el de `.moveTable th`, intencional). **No
+verificado a ojo en navegador todavía** — David debe confirmar si esto resuelve el
+solape y si el scroll vertical no deseado desaparece. Si sigue habiendo problemas
+después de este cambio, el patrón de "adivinar CSS sin poder verlo" ha llegado a su
+límite en esta sesión — la vía a seguir sería pedirle a David que conecte
+`claude-in-chrome` (sigue sin estar disponible pese a varios intentos en esta y
+sesiones anteriores) en vez de seguir iterando a ciegas.
+
+### El sticky NO era la causa — fallo estructural real encontrado — HECHO 2026-08-18
+
+Quitar el `position: sticky` (sección anterior) **no arregló nada** — David: "el
+scroll sigue ahí. de verdad eres incapaz de encontrar la causa??". David instaló
+`claude-in-chrome` a media conversación pero **seguía sin aparecer como herramienta
+disponible** (necesita reinicio de sesión para registrarse, igual que los plugins de
+`frontend-design`/`superdesign` en su momento — pendiente para la próxima sesión en
+esta máquina). Sin poder verlo, Claude paró de parchear síntomas y repensó la cadena
+de layout entera desde cero, a mano, con aritmética CSS real:
+
+**Causa raíz encontrada**: `.page` tenía `height: calc(100vh - 4.1rem)` fijo (de la
+sesión "scroll externo colándose"), pero ese `4.1rem` es una ESTIMACIÓN del alto real
+del nav de la app — y `.page` es hijo de `.main` de `App.module.css`
+(`flex: 1; display: flex`, **sin ningún `overflow`**). En cuanto la estimación se
+desvía del alto real aunque sea un poco, `.page` (con un alto FIJO, no un máximo) se
+pasa del hueco que le da ese contenedor flex, y como nada lo frena, el documento
+entero se desborda → scroll externo persistente. Cualquier reajuste del número
+(`12rem` → `8rem` → `4.1rem` en las sesiones anteriores) solo movía el problema, nunca
+lo resolvía de raíz, porque el diseño en sí exigía adivinar una cifra a la perfección
+para no romperse — y encima el "solape de `.tabs` sobre `.content`" que David vio era
+casi con toda seguridad un síntoma DERIVADO de este mismo desbordamiento (contenido
+empujado/mal medido), no un bug de `position: sticky` en sí — de ahí que quitar sticky
+no arreglara nada.
+
+**Rediseño sin ninguna cifra que adivinar**:
+- **`.page`**: quitados `height`/`overflow` por completo. Vuelve a ser un bloque
+  normal sin alto propio, igual que `PokemonListPage`/`ItemsListPage` — si en algún
+  caso extremo el contenido no cupiera, la página scrollearía normal (como hacía
+  antes de toda esta sub-saga), en vez de arriesgarse a desbordar un contenedor sin
+  frenos por una estimación mal calibrada.
+- **`.layout`**: quitados `flex: 1`, `min-height: 0` y el `grid-template-rows: 1fr`
+  explícito. Vuelve al comportamiento NATIVO de CSS Grid: una fila implícita `auto`
+  con `align-items: stretch` (ya es el valor por defecto, se dejó explícito) hace que
+  `.hero` y `.main` — NINGUNO de los dos con alto propio ahora — midan automáticamente
+  lo mismo (el más alto de los dos manda, el otro se estira). Esto consigue "el hero
+  mide lo mismo que `.main`" (el pedido original de David) SIN fijar ningún número en
+  ningún sitio — es el patrón de Grid mejor probado para "igualar el alto de dos
+  columnas", en vez de reconstruirlo a mano con alturas explícitas encadenadas.
+- **`.hero`/`.main`**: quitado `height: 100%` de ambos (ya no hace falta, lo resuelve
+  el stretch de arriba).
+- **`.content`**: vuelve a `max-height: calc(100vh - 14rem)` en vez de `flex: 1`
+  dependiendo de que `.main` tuviera un alto exacto. Esta cifra sigue siendo una
+  estimación, pero ahora es de BAJO RIESGO: si se queda corta o larga, lo peor que
+  pasa es que la barra de scroll interna de `.content` aparece un poco antes o después
+  de lo ideal — nunca que la página entera se desborde, porque ya no hay ninguna
+  cadena de alturas exactas que dependa de ella.
+- Limpiados los `@media (max-width:900px)` que ya no hacían falta (`.hero`/`.main` ya
+  no tienen alto propio en desktop que anular en móvil).
+
+**Verificado**: Vite compila sin errores (`docker compose restart frontend` limpio).
+**Seguimos sin poder verlo a ojo** — `claude-in-chrome` instalado por David pero no
+disponible todavía en esta sesión (necesita reinicio). **Cuando se retome esta
+página en una sesión nueva, comprobar primero si `claude-in-chrome` ya está
+disponible** — sería la primera vez en toda la vida de este proyecto que se puede
+verificar un cambio visual a ojo en vez de a ciegas, y esta página en concreto lo
+necesita más que ninguna otra dado el historial de esta sesión.

@@ -3,7 +3,7 @@
   flex-direction: column;
   gap: 1.25rem;
   padding: 2rem;
-  max-width: 34rem;
+  max-width: 52rem;
   margin: 0 auto;
   width: 100%;
 }
@@ -13,10 +13,19 @@
   margin-bottom: 0.25rem;
 }
 
+/* Franja de estado (antes /status, página aparte) — StatusRow ya trae su propio
+   padding/borde, así que en fila solo hace falta envolverlos sin forzar ancho. */
+.statusStrip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
 .group {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.4rem;
   margin-top: 0.5rem;
 }
 
@@ -129,4 +138,85 @@
   font-family: var(--font-mono);
   font-size: 0.78rem;
   color: var(--error);
+}
+
+/* Tabla de recursos (antes una tarjeta apilada por recurso, con las 49 filas ocupando
+   varias pantallas de scroll — David pidió algo mucho más compacto). Cada fila cabe en
+   una línea salvo mientras está cacheando (barra de progreso mini). */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table td {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.resourceName {
+  color: var(--text-h);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.statusCell {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+
+.actionCell {
+  text-align: right;
+}
+
+.statusCell .progress {
+  gap: 0.5rem;
+}
+
+.statusCell .track {
+  width: 6rem;
+  flex: 0 0 auto;
+}
+
+.statusCell .error {
+  display: inline-block;
+  max-width: 26rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.progressLabel {
+  white-space: nowrap;
+}
+
+.miniButton {
+  cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  background: var(--chassis-800);
+  color: var(--text-h);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.66rem;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.miniButton:hover:not(:disabled) {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+.miniButton:disabled {
+  opacity: 0.6;
+  cursor: default;
 }

@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next'
 import useCacheAllResource from '../../hooks/useCacheAllResource.js'
 import useCacheEverything from '../../hooks/useCacheEverything.js'
+import useServiceHealth from '../../hooks/useServiceHealth.js'
+import StatusRow from '../../components/StatusRow/StatusRow.jsx'
 import { useLanguage } from '../../contexts/LanguageContext.jsx'
 import { RESOURCE_GROUPS } from '../../utils/pokeApiResources.js'
 import styles from './CacheAllPage.module.css'
@@ -11,33 +13,56 @@ function ResourceCacheRow({ resourceType, label }) {
   const progress = total > 0 ? Math.round((done / total) * 100) : 0
 
   return (
-    <div className={styles.row}>
-      <div className={styles.rowHeader}>
-        <span className={styles.rowLabel}>{label}</span>
-        <button
-          type="button"
-          className={styles.button}
-          onClick={start}
-          disabled={status === 'running'}
-        >
+    <tr>
+      <td className={styles.resourceName}>{label}</td>
+      <td className={styles.statusCell}>
+        {status === 'running' && (
+          <span className={styles.progress}>
+            <span className={styles.track}>
+              <span className={styles.bar} style={{ width: `${progress}%` }} />
+            </span>
+            <span className={styles.progressLabel}>
+              {done}/{total}
+            </span>
+          </span>
+        )}
+        {status === 'done' && <span className={styles.done}>{t('cache.resourceDone', { count: total })}</span>}
+        {status === 'error' && (
+          <span className={styles.error} title={error}>
+            {error}
+          </span>
+        )}
+      </td>
+      <td className={styles.actionCell}>
+        <button type="button" className={styles.miniButton} onClick={start} disabled={status === 'running'}>
           {status === 'running' ? t('cache.cachingButton') : t('cache.cacheButton')}
         </button>
-      </div>
+      </td>
+    </tr>
+  )
+}
 
-      {status === 'running' && (
-        <div className={styles.progress}>
-          <div className={styles.track}>
-            <div className={styles.bar} style={{ width: `${progress}%` }} />
-          </div>
-          <span>
-            {done} / {total} ({progress}%)
-          </span>
-        </div>
-      )}
+// Franja compacta de estado de los 3 servicios (antes su propia página /status,
+// David pidió fusionarla con /cache) — mismos StatusRow/useServiceHealth de siempre,
+// solo que en fila en vez de apilados en un panel centrado aparte.
+function StatusStrip() {
+  const { backend, database, retry } = useServiceHealth()
+  const { t } = useTranslation()
 
-      {status === 'done' && <p className={styles.done}>{t('cache.resourceDone', { count: total })}</p>}
+  const backendValue = backend === 'pending' ? t('status.pending') : t(`status.backend${backend === 'ok' ? 'Ok' : 'Error'}`)
+  const databaseValue =
+    database === 'pending'
+      ? t('status.pending')
+      : t(`status.database${{ ok: 'Ok', error: 'Error', unknown: 'Unknown' }[database]}`)
 
-      {status === 'error' && <p className={styles.error}>{error}</p>}
+  return (
+    <div className={styles.statusStrip}>
+      <StatusRow label={t('status.frontend')} state="ok" value={t('status.frontendOk')} />
+      <StatusRow label={t('status.backendApi')} state={backend} value={backendValue} />
+      <StatusRow label={t('status.database')} state={database} value={databaseValue} />
+      <button type="button" className={styles.miniButton} onClick={retry}>
+        {t('status.retry')}
+      </button>
     </div>
   )
 }
@@ -52,6 +77,8 @@ export default function CacheAllPage() {
     <section className={styles.page}>
       <span className="eyebrow">{t('cache.eyebrow')}</span>
       <h1 className={styles.title}>{t('cache.title')}</h1>
+
+      <StatusStrip />
 
       <div className={`${styles.row} ${styles.master}`}>
         <div className={styles.rowHeader}>
@@ -83,9 +110,13 @@ export default function CacheAllPage() {
       {RESOURCE_GROUPS.map((group) => (
         <div key={group.label.es} className={styles.group}>
           <h2 className={styles.groupTitle}>{group.label[language]}</h2>
-          {group.resources.map(({ type, label }) => (
-            <ResourceCacheRow key={type} resourceType={type} label={label[language]} />
-          ))}
+          <table className={styles.table}>
+            <tbody>
+              {group.resources.map(({ type, label }) => (
+                <ResourceCacheRow key={type} resourceType={type} label={label[language]} />
+              ))}
+            </tbody>
+          </table>
         </div>
       ))}
     </section>

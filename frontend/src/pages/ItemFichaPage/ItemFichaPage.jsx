@@ -50,7 +50,16 @@ export default function ItemFichaPage() {
 
       <header className={styles.hero}>
         <div className={`${styles.iconWrap} hud-frame hud-frame--animated`}>
-          <img src={icon.src} onError={icon.onError} alt={displayName} width={96} height={96} />
+          {icon.exhausted ? (
+            <span className={styles.iconPlaceholder} aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 8.5 12 4l9 4.5-9 4.5-9-4.5Z" />
+                <path d="M3 8.5V16l9 4.5 9-4.5V8.5M12 13v7.5" />
+              </svg>
+            </span>
+          ) : (
+            <img src={icon.src} onError={icon.onError} alt={displayName} width={96} height={96} />
+          )}
         </div>
         <div>
           <h1 className={styles.name}>{displayName}</h1>

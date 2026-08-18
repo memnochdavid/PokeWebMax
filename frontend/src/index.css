@@ -160,25 +160,26 @@ button {
 .hud-frame::before {
   content: '';
   position: absolute;
-  inset: -8px;
+  inset: -10px;
   pointer-events: none;
   background-repeat: no-repeat;
   background-image:
-    linear-gradient(to right, currentColor 2px, transparent 2px),
-    linear-gradient(to right, currentColor 2px, transparent 2px),
-    linear-gradient(to left, currentColor 2px, transparent 2px),
-    linear-gradient(to left, currentColor 2px, transparent 2px),
-    linear-gradient(to bottom, currentColor 2px, transparent 2px),
-    linear-gradient(to bottom, currentColor 2px, transparent 2px),
-    linear-gradient(to top, currentColor 2px, transparent 2px),
-    linear-gradient(to top, currentColor 2px, transparent 2px);
+    linear-gradient(to right, currentColor 3px, transparent 3px),
+    linear-gradient(to right, currentColor 3px, transparent 3px),
+    linear-gradient(to left, currentColor 3px, transparent 3px),
+    linear-gradient(to left, currentColor 3px, transparent 3px),
+    linear-gradient(to bottom, currentColor 3px, transparent 3px),
+    linear-gradient(to bottom, currentColor 3px, transparent 3px),
+    linear-gradient(to top, currentColor 3px, transparent 3px),
+    linear-gradient(to top, currentColor 3px, transparent 3px);
   background-position:
     top left, bottom left,
     top right, bottom right,
     top left, top right,
     bottom left, bottom right;
-  background-size: 16px 2px, 16px 2px, 16px 2px, 16px 2px, 2px 16px, 2px 16px, 2px 16px, 2px 16px;
-  opacity: 0.85;
+  background-size: 22px 3px, 22px 3px, 22px 3px, 22px 3px, 3px 22px, 3px 22px, 3px 22px, 3px 22px;
+  filter: drop-shadow(0 0 3px currentColor);
+  opacity: 1;
 }
 
 .hud-frame--hover::before {

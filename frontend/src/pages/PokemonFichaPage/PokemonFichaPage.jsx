@@ -46,13 +46,87 @@ const officialArtworkUrl = (id) =>
 
 const sectionLabel = Object.fromEntries(FICHA_SECTIONS.map(({ key, label }) => [key, label]))
 
+// Un icono por pestaña/sección — puramente decorativo (currentColor, hereda el color de
+// tipo de la sección), no necesita ser un componente aparte por lo simple que es.
+const SECTION_ICONS = {
+  DESC: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 5h16M4 12h16M4 19h10" />
+    </svg>
+  ),
+  EVOS: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12h11M12 5l7 7-7 7" />
+    </svg>
+  ),
+  STATS: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 20V10M12 20V4M20 20v-7" />
+    </svg>
+  ),
+  ABILITY: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3l1.9 4.6L18 9l-4.1 1.4L12 15l-1.9-4.6L6 9l4.1-1.4L12 3Z" />
+      <path d="M19 15l.7 1.6L21 17l-1.9.9-.7 1.6-.7-1.6L16 17l1.9-.9.7-1.6Z" />
+    </svg>
+  ),
+  MOVES: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 6l12 12M18 6 6 18" />
+      <path d="M4 4l3 1M20 4l-3 1M4 20l3-1M20 20l-3-1" />
+    </svg>
+  ),
+  INFO: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v6M12 7.5v.01" />
+    </svg>
+  ),
+  FORM: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3 3 8l9 5 9-5-9-5Z" />
+      <path d="M3 12l9 5 9-5M3 16l9 5 9-5" />
+    </svg>
+  ),
+}
+
 // Ver comentario sobre sectionRefs/scrollToSection en el componente: en escritorio da
 // igual (todas visibles), en móvil solo la sección activa queda sin este class extra.
 const sectionClassName = (styles, key, activeSection) =>
   key === activeSection ? styles.sectionBlock : `${styles.sectionBlock} ${styles.sectionInactiveMobile}`
 
-const collapseWrapClassName = (styles, key, collapsedSections) =>
-  collapsedSections.has(key) ? `${styles.collapseWrap} ${styles.collapseWrapClosed}` : styles.collapseWrap
+// Solo una sección puede estar abierta a la vez (pedido explícito de David) — openSection
+// es la clave abierta o null, en vez de un Set de colapsadas.
+const collapseWrapClassName = (styles, key, openSection) =>
+  key === openSection ? styles.collapseWrap : `${styles.collapseWrap} ${styles.collapseWrapClosed}`
+
+// Debe coincidir con la duración de transition de .collapseWrap en el CSS — ver
+// comentario de scrollSectionIntoView.
+const COLLAPSE_TRANSITION_MS = 250
+
+// Al abrir una sección (clic en su propia cabecera o en una pestaña de arriba, ver
+// toggleCollapse/expandSection), el scroll INTERNO de .content se mueve para dejar su
+// cabecera arriba del todo — pedido explícito de David, sustituye al reordenamiento
+// visual (mover la sección al principio) que había antes.
+//
+// Un solo requestAnimationFrame no basta: si YA había otra sección abierta, abrir
+// esta cierra aquella (acordeón de una sola), y su colapso anima
+// `grid-template-rows` durante 250ms (.collapseWrap) — eso desplaza hacia arriba
+// todo lo que esté debajo mientras se encoge. Calcular el scroll en el frame
+// siguiente capturaba la posición ANTES de que ese desplazamiento terminara, así que
+// el resultado quedaba corto y hacía falta un segundo clic (con nada más animando ya)
+// para que acertara. Se espera a que la transición termine del todo en vez de un
+// único frame.
+//
+// Solo en escritorio: en móvil el scroll no es interno a .content (ver mobile
+// override en el CSS), es la página entera, y las secciones se muestran/ocultan por
+// completo en vez de apilarse.
+function scrollSectionIntoView(sectionRefs, key) {
+  if (!window.matchMedia('(min-width: 901px)').matches) return
+  setTimeout(() => {
+    sectionRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, COLLAPSE_TRANSITION_MS + 20)
+}
 
 // Catálogo interno indexado por clave (mismo criterio que SORTS en usePokemonBrowser)
 // para las columnas ordenables de la tabla de movimientos. 'level' ordena por método
@@ -76,8 +150,8 @@ const MOVE_SORTS = {
 // Cabecera clicable de cada sección — colapsa/expande con animación (ver
 // .collapseWrap en el CSS, truco de grid-template-rows 1fr/0fr en vez de max-height a
 // mano). Componente aparte porque se repite igual en las 7 secciones.
-function SectionHeading({ label, sectionKey, collapsed, onToggle, color }) {
-  const isCollapsed = collapsed.has(sectionKey)
+function SectionHeading({ label, sectionKey, openSection, onToggle, color, icon, preview }) {
+  const isCollapsed = sectionKey !== openSection
   return (
     <button
       type="button"
@@ -85,9 +159,13 @@ function SectionHeading({ label, sectionKey, collapsed, onToggle, color }) {
       onClick={() => onToggle(sectionKey)}
       aria-expanded={!isCollapsed}
     >
-      <h2 className={styles.sectionHeading} style={{ color, borderColor: color }}>
-        {label}
-      </h2>
+      <span className={styles.sectionHeadingMain} style={{ color }}>
+        <span className={styles.sectionIconChip}>{icon}</span>
+        <span className={styles.sectionHeadingText}>
+          <h2 className={styles.sectionHeading}>{label}</h2>
+          {preview && <span className={styles.sectionPreview}>{preview}</span>}
+        </span>
+      </span>
       <span
         className={isCollapsed ? `${styles.collapseChevron} ${styles.collapseChevronClosed}` : styles.collapseChevron}
         style={{ color }}
@@ -118,25 +196,27 @@ export default function PokemonFichaPage() {
     }
   }
   // Todas colapsadas al abrir la ficha (pedido explícito de David) — se reinicia al
-  // navegar a otra ficha (evolución), no solo en la primera carga de la app.
-  const [collapsedSections, setCollapsedSections] = useState(() => new Set(FICHA_SECTIONS.map((s) => s.key)))
+  // navegar a otra ficha (evolución), no solo en la primera carga de la app. Solo una
+  // sección puede estar abierta a la vez (pedido explícito de David) — openSection es
+  // la clave abierta o null, en vez de un Set de colapsadas donde varias podían estarlo
+  // a la vez.
+  const [openSection, setOpenSection] = useState(null)
   useEffect(() => {
-    setCollapsedSections(new Set(FICHA_SECTIONS.map((s) => s.key)))
+    setOpenSection(null)
   }, [idOrName])
-  const toggleCollapse = (key) =>
-    setCollapsedSections((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  const expandSection = (key) =>
-    setCollapsedSections((prev) => {
-      if (!prev.has(key)) return prev
-      const next = new Set(prev)
-      next.delete(key)
-      return next
-    })
+  // sectionRefs se declara aquí (antes de usarlo) porque scrollToSection más abajo lo
+  // necesita — ver comentario junto a los <section> del JSX sobre por qué se
+  // renderizan siempre las 7 en vez de condicionalmente.
+  const sectionRefs = useRef({})
+  const toggleCollapse = (key) => {
+    const opening = openSection !== key
+    setOpenSection((prev) => (prev === key ? null : key))
+    if (opening) scrollSectionIntoView(sectionRefs, key)
+  }
+  const expandSection = (key) => {
+    setOpenSection(key)
+    scrollSectionIntoView(sectionRefs, key)
+  }
   const toggleMove = (id) =>
     setExpandedMoves((prev) => {
       const next = new Set(prev)
@@ -169,19 +249,11 @@ export default function PokemonFichaPage() {
   // móvil se mantiene el comportamiento de antes (una sección visible a la vez, ver
   // .sectionInactiveMobile en el CSS): ahí sí tiene sentido por espacio de pantalla,
   // como razonó David al pedir este cambio — ver
-  // .claude/memory/project_pokewebmax_progress.md.
-  const sectionRefs = useRef({})
+  // .claude/memory/project_pokewebmax_progress.md. (sectionRefs se declaró más arriba,
+  // lo necesita también el hook de FLIP del reordenamiento animado.)
   const scrollToSection = (key) => {
     setSection(key)
-    expandSection(key)
-    if (window.matchMedia('(min-width: 901px)').matches) {
-      // Un frame para dar tiempo a que el colapso se expanda antes de calcular el
-      // scroll — si estaba colapsada, scrollIntoView con la sección todavía a 0fr de
-      // alto apuntaría al sitio equivocado.
-      requestAnimationFrame(() => {
-        sectionRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      })
-    }
+    expandSection(key) // ya incluye el scroll interno hacia su cabecera, ver arriba
   }
 
   useEffect(() => {
@@ -218,7 +290,7 @@ export default function PokemonFichaPage() {
     observer.observe(el)
     return () => observer.disconnect()
   }, [ficha])
-  const statsAnimated = statsInView && !collapsedSections.has('STATS')
+  const statsAnimated = statsInView && openSection === 'STATS'
 
   if (status === 'loading') return <p className={styles.status}>{t('ficha.loading')}</p>
   if (status === 'error') return <p className={styles.statusError}>{error}</p>
@@ -234,6 +306,24 @@ export default function PokemonFichaPage() {
   const versions = flavorTextsByVersion(species, language, wikidexFlavorText)
   const activeVersion = versions.find((v) => v.version === selectedVersion) ?? versions[0]
   const displayName = speciesDisplayName(species, language, capitalize(pokemon.name))
+
+  // Hoisted fuera del JSX de la sección EVOS para poder reusarlo también como subtítulo
+  // de la cabecera colapsada (ver sectionPreviews) sin recalcularlo dos veces.
+  const evoStagesList = evolutionChain ? evolutionStages(evolutionChain, t) : []
+  const statsTotal = pokemon.stats.reduce((sum, s) => sum + s.base_stat, 0)
+  // Subtítulo de una línea bajo cada título de sección, visible tanto colapsada como
+  // abierta — mitiga que la ficha se vea "vacía" con todo colapsado por defecto (ver
+  // .claude/memory/project_pokewebmax_progress.md, decisión de David de colapsar todo
+  // al abrir) sin tener que revertir esa decisión.
+  const sectionPreviews = {
+    DESC: versions.length > 0 ? t('ficha.previewVersions', { count: versions.length }) : null,
+    EVOS: evoStagesList.length > 0 ? t('ficha.previewStages', { count: evoStagesList.length }) : null,
+    STATS: t('ficha.previewStatsTotal', { value: statsTotal }),
+    ABILITY: abilities.length > 0 ? t('ficha.previewAbilities', { count: abilities.length }) : null,
+    MOVES: moves.length > 0 ? t('ficha.previewMoves', { count: moves.length }) : null,
+    INFO: species ? t('ficha.previewBaseExp', { value: pokemon.base_experience ?? '—' }) : null,
+    FORM: forms.length > 0 ? t('ficha.previewForms', { count: forms.length }) : null,
+  }
 
   // Las formas Gigamax no tienen género ni shiny en el material descargado (ver
   // animatedSpriteUrl) — se oculta el toggle en vez de dejarlo apuntar a una
@@ -374,7 +464,13 @@ export default function PokemonFichaPage() {
         <div className={styles.tabPills}>
           {FICHA_SECTIONS.map(({ key, label, missingKey }) => {
             const count = sectionMissingCount(missing, missingKey)
-            const active = section === key
+            // openSection, no el `section` del scrollspy: con el acordeón de una sola
+            // sección + scroll-al-abrir, la pestaña resaltada debe reflejar cuál está
+            // realmente desplegada, no cuál anda más cerca del borde superior del
+            // scroll interno (eso derivaba hacia la sección siguiente en cuanto se
+            // scrolleaba dentro de una sección larga, aunque siguiera siendo la
+            // abierta). `section` se queda solo para la conmutación de vista en móvil.
+            const active = openSection === key
             return (
               <button
                 key={key}
@@ -383,6 +479,7 @@ export default function PokemonFichaPage() {
                 style={active ? { background: primaryColor, color: '#fff' } : undefined}
                 onClick={() => scrollToSection(key)}
               >
+                <span className={styles.tabIcon}>{SECTION_ICONS[key]}</span>
                 {label[language]}
                 {count > 0 && <span className={styles.badge}>{count}</span>}
               </button>
@@ -398,8 +495,8 @@ export default function PokemonFichaPage() {
           data-section-key="DESC"
           className={sectionClassName(styles, 'DESC', section)}
         >
-          <SectionHeading label={sectionLabel.DESC[language]} sectionKey="DESC" collapsed={collapsedSections} onToggle={toggleCollapse} color={primaryColor} />
-          <div className={collapseWrapClassName(styles, 'DESC', collapsedSections)}>
+          <SectionHeading label={sectionLabel.DESC[language]} sectionKey="DESC" openSection={openSection} onToggle={toggleCollapse} color={primaryColor} icon={SECTION_ICONS.DESC} preview={sectionPreviews.DESC} />
+          <div className={collapseWrapClassName(styles, 'DESC', openSection)}>
           <div className={styles.collapseInner}>
             {versions.length > 0 ? (
               <>
@@ -470,12 +567,12 @@ export default function PokemonFichaPage() {
           data-section-key="EVOS"
           className={sectionClassName(styles, 'EVOS', section)}
         >
-          <SectionHeading label={sectionLabel.EVOS[language]} sectionKey="EVOS" collapsed={collapsedSections} onToggle={toggleCollapse} color={primaryColor} />
-          <div className={collapseWrapClassName(styles, 'EVOS', collapsedSections)}>
+          <SectionHeading label={sectionLabel.EVOS[language]} sectionKey="EVOS" openSection={openSection} onToggle={toggleCollapse} color={primaryColor} icon={SECTION_ICONS.EVOS} preview={sectionPreviews.EVOS} />
+          <div className={collapseWrapClassName(styles, 'EVOS', openSection)}>
           <div className={styles.collapseInner}>
           {evolutionChain ? (
             <div className={styles.evoList}>
-              {evolutionStages(evolutionChain, t).map((stage, i) => {
+              {evoStagesList.map((stage, i) => {
                 const stageTypes = pokemonNames[stage.id]?.types ?? []
                 const evoColor1 = stageTypes.length > 0 ? typeColor(stageTypes[0]) : '#9c9c9c'
                 const evoColor2 = stageTypes.length > 0 ? typeColor(stageTypes[1] ?? stageTypes[0]) : '#7a7a7a'
@@ -525,8 +622,8 @@ export default function PokemonFichaPage() {
           data-section-key="STATS"
           className={sectionClassName(styles, 'STATS', section)}
         >
-          <SectionHeading label={sectionLabel.STATS[language]} sectionKey="STATS" collapsed={collapsedSections} onToggle={toggleCollapse} color={primaryColor} />
-          <div className={collapseWrapClassName(styles, 'STATS', collapsedSections)}>
+          <SectionHeading label={sectionLabel.STATS[language]} sectionKey="STATS" openSection={openSection} onToggle={toggleCollapse} color={primaryColor} icon={SECTION_ICONS.STATS} preview={sectionPreviews.STATS} />
+          <div className={collapseWrapClassName(styles, 'STATS', openSection)}>
           <div className={styles.collapseInner}>
           <div className={styles.statsPanel}>
             <StatRadarChart stats={pokemon.stats} color={primaryColor} animate={statsAnimated} />
@@ -548,7 +645,7 @@ export default function PokemonFichaPage() {
                 )
               })}
               <p className={styles.statsTotal}>
-                {t('ficha.statsTotal')} <strong>{pokemon.stats.reduce((sum, s) => sum + s.base_stat, 0)}</strong>
+                {t('ficha.statsTotal')} <strong>{statsTotal}</strong>
               </p>
             </div>
           </div>
@@ -562,8 +659,8 @@ export default function PokemonFichaPage() {
           data-section-key="ABILITY"
           className={sectionClassName(styles, 'ABILITY', section)}
         >
-          <SectionHeading label={sectionLabel.ABILITY[language]} sectionKey="ABILITY" collapsed={collapsedSections} onToggle={toggleCollapse} color={primaryColor} />
-          <div className={collapseWrapClassName(styles, 'ABILITY', collapsedSections)}>
+          <SectionHeading label={sectionLabel.ABILITY[language]} sectionKey="ABILITY" openSection={openSection} onToggle={toggleCollapse} color={primaryColor} icon={SECTION_ICONS.ABILITY} preview={sectionPreviews.ABILITY} />
+          <div className={collapseWrapClassName(styles, 'ABILITY', openSection)}>
           <div className={styles.collapseInner}>
           <ul className={styles.cardList}>
             {abilities.map((a) => {
@@ -602,8 +699,8 @@ export default function PokemonFichaPage() {
           data-section-key="MOVES"
           className={sectionClassName(styles, 'MOVES', section)}
         >
-          <SectionHeading label={sectionLabel.MOVES[language]} sectionKey="MOVES" collapsed={collapsedSections} onToggle={toggleCollapse} color={primaryColor} />
-          <div className={collapseWrapClassName(styles, 'MOVES', collapsedSections)}>
+          <SectionHeading label={sectionLabel.MOVES[language]} sectionKey="MOVES" openSection={openSection} onToggle={toggleCollapse} color={primaryColor} icon={SECTION_ICONS.MOVES} preview={sectionPreviews.MOVES} />
+          <div className={collapseWrapClassName(styles, 'MOVES', openSection)}>
           <div className={styles.collapseInner}>
           <div className={styles.moveTableWrap}>
           <table className={styles.moveTable}>
@@ -717,8 +814,8 @@ export default function PokemonFichaPage() {
           data-section-key="INFO"
           className={sectionClassName(styles, 'INFO', section)}
         >
-          <SectionHeading label={sectionLabel.INFO[language]} sectionKey="INFO" collapsed={collapsedSections} onToggle={toggleCollapse} color={primaryColor} />
-          <div className={collapseWrapClassName(styles, 'INFO', collapsedSections)}>
+          <SectionHeading label={sectionLabel.INFO[language]} sectionKey="INFO" openSection={openSection} onToggle={toggleCollapse} color={primaryColor} icon={SECTION_ICONS.INFO} preview={sectionPreviews.INFO} />
+          <div className={collapseWrapClassName(styles, 'INFO', openSection)}>
           <div className={styles.collapseInner}>
           {species ? (
             <dl className={styles.infoList}>
@@ -784,8 +881,8 @@ export default function PokemonFichaPage() {
           data-section-key="FORM"
           className={sectionClassName(styles, 'FORM', section)}
         >
-          <SectionHeading label={sectionLabel.FORM[language]} sectionKey="FORM" collapsed={collapsedSections} onToggle={toggleCollapse} color={primaryColor} />
-          <div className={collapseWrapClassName(styles, 'FORM', collapsedSections)}>
+          <SectionHeading label={sectionLabel.FORM[language]} sectionKey="FORM" openSection={openSection} onToggle={toggleCollapse} color={primaryColor} icon={SECTION_ICONS.FORM} preview={sectionPreviews.FORM} />
+          <div className={collapseWrapClassName(styles, 'FORM', openSection)}>
           <div className={styles.collapseInner}>
           <ul className={styles.cardList}>
             {forms.map((f) => {

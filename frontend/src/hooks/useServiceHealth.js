@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import axios from 'axios'
 
 // Solo estados (ok/error/pending/unknown), no texto ya traducido — el texto se resuelve
-// en el render vía react-i18next (ver StatusPage.jsx), así que un cambio de idioma no
+// en el render vía react-i18next (ver CacheAllPage.jsx), así que un cambio de idioma no
 // deja frases viejas atrapadas en este estado.
 const PENDING = { backend: 'pending', database: 'pending' }
 

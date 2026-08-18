@@ -1,7 +1,6 @@
 {
   "nav": {
     "brand": "PokeWebMax",
-    "status": "Status",
     "cache": "Cache",
     "pokemon": "Pokémon",
     "items": "Items",
@@ -10,8 +9,6 @@
     "themeSwitchToDark": "Switch to dark theme"
   },
   "status": {
-    "eyebrow": "System diagnostics",
-    "title": "PokeWebMax",
     "retry": "Check again",
     "frontend": "Frontend",
     "backendApi": "Backend API",
@@ -130,6 +127,13 @@
     "movePower": "Pow.",
     "movePP": "PP",
     "moveAccuracy": "Acc.",
+    "previewVersions": "{{count}} versions",
+    "previewStages": "{{count}} stages",
+    "previewAbilities": "{{count}} abilities",
+    "previewMoves": "{{count}} moves",
+    "previewForms": "{{count}} forms",
+    "previewBaseExp": "Base Exp. {{value}}",
+    "previewStatsTotal": "Total {{value}}",
     "info": {
       "baseExp": "Base Exp.",
       "gender": "Gender",

@@ -33,6 +33,25 @@
   max-height: 100%;
 }
 
+/* Objeto sin icono en ningún fallback (ver hooks/useImageFallback.js `exhausted`) —
+   sobre todo los ~80 caramelos de especie de Pokémon GO, que no tienen sprite oficial
+   en ningún juego de sobremesa. Silueta de caja genérica en vez del icono roto del
+   navegador. */
+.spritePlaceholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--text);
+  opacity: 0.35;
+}
+
+.spritePlaceholder svg {
+  width: 60%;
+  height: 60%;
+}
+
 .info {
   display: flex;
   flex-direction: column;

@@ -1,6 +1,5 @@
 import { NavLink, Route, Routes } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import StatusPage from './pages/StatusPage/StatusPage.jsx'
 import CacheAllPage from './pages/CacheAllPage/CacheAllPage.jsx'
 import PokemonListPage from './pages/PokemonListPage/PokemonListPage.jsx'
 import PokemonFichaPage from './pages/PokemonFichaPage/PokemonFichaPage.jsx'
@@ -33,9 +32,6 @@ function App() {
           </NavLink>
           <NavLink to="/cache" className={navLinkClassName}>
             {t('nav.cache')}
-          </NavLink>
-          <NavLink to="/status" className={navLinkClassName}>
-            {t('nav.status')}
           </NavLink>
         </div>
         <div className={styles.langSwitch} role="group" aria-label={t('nav.dataLanguageAria')}>
@@ -76,7 +72,6 @@ function App() {
           <Route path="/objetos" element={<ItemsListPage />} />
           <Route path="/objetos/:idOrName" element={<ItemFichaPage />} />
           <Route path="/cache" element={<CacheAllPage />} />
-          <Route path="/status" element={<StatusPage />} />
           <Route path="/ficha/:idOrName" element={<PokemonFichaPage />} />
         </Routes>
       </main>
