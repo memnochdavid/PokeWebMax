@@ -1,0 +1,96 @@
+.wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--chassis-900);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--chassis-800);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.headerButton {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.7rem;
+  padding: 0.65rem 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.headerButton:hover {
+  color: var(--signal);
+}
+
+.arrow {
+  color: var(--signal);
+}
+
+.spriteHeader {
+  width: 3rem;
+}
+
+.row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.row:not(:last-child) {
+  border-bottom: 1px solid var(--line);
+}
+
+.row:hover {
+  background: var(--chassis-800);
+}
+
+.row td {
+  padding: 0.4rem 0.8rem;
+  vertical-align: middle;
+}
+
+.spriteCell {
+  padding: 0.25rem 0.5rem;
+}
+
+.sprite {
+  display: block;
+  width: 2.5rem;
+  height: 2.5rem;
+  object-fit: contain;
+}
+
+.number {
+  color: var(--text-h);
+  white-space: nowrap;
+}
+
+.name {
+  color: var(--text-h);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}

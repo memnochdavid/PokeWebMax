@@ -1,0 +1,33 @@
+.group {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  overflow: hidden;
+}
+
+.option {
+  cursor: pointer;
+  border: none;
+  border-left: 1px solid var(--line);
+  background: var(--chassis-800);
+  color: var(--text);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+  padding: 0.55rem 0.8rem;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.option:first-child {
+  border-left: none;
+}
+
+.option:hover {
+  color: var(--text-h);
+}
+
+.optionActive {
+  background: var(--signal);
+  color: var(--signal-contrast);
+}

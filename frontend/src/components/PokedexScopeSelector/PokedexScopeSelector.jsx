@@ -20,6 +20,9 @@ export default function PokedexScopeSelector({
   pokedexOptionsForRegion,
   versionName,
   onSetVersionName,
+  hasSiblingVersions,
+  exclusiveOnly,
+  onSetExclusiveOnly,
   catalog,
   language,
 }) {
@@ -81,18 +84,31 @@ export default function PokedexScopeSelector({
           )}
 
           {pokedexMode === 'game' && (
-            <select
-              className={styles.select}
-              value={versionName}
-              onChange={(e) => onSetVersionName(e.target.value)}
-            >
-              <option value="">{t('list.gamePlaceholder')}</option>
-              {catalog.versions.map((entry) => (
-                <option key={entry.name} value={entry.name}>
-                  {entry.label[language] ?? entry.label.es ?? entry.name}
-                </option>
-              ))}
-            </select>
+            <>
+              <select
+                className={styles.select}
+                value={versionName}
+                onChange={(e) => onSetVersionName(e.target.value)}
+              >
+                <option value="">{t('list.gamePlaceholder')}</option>
+                {catalog.versions.map((entry) => (
+                  <option key={entry.name} value={entry.name}>
+                    {entry.label[language] ?? entry.label.es ?? entry.name}
+                  </option>
+                ))}
+              </select>
+
+              {versionName && hasSiblingVersions && (
+                <label className={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={exclusiveOnly}
+                    onChange={(e) => onSetExclusiveOnly(e.target.checked)}
+                  />
+                  {t('list.exclusiveOnly')}
+                </label>
+              )}
+            </>
           )}
         </>
       )}

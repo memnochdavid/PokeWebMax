@@ -47,7 +47,15 @@
     "modeGame": "Por juego",
     "regionPlaceholder": "Elegir región…",
     "editionPlaceholder": "Elegir edición…",
-    "gamePlaceholder": "Elegir juego…"
+    "gamePlaceholder": "Elegir juego…",
+    "viewGrid": "Tarjetas",
+    "viewTable": "Tabla",
+    "exclusiveOnly": "Solo exclusivos de este juego",
+    "exclusiveDataMissing_one": "Faltan los encuentros de {{count}} Pokémon para saber cuáles son exclusivos.",
+    "exclusiveDataMissing_other": "Faltan los encuentros de {{count}} Pokémon para saber cuáles son exclusivos.",
+    "cacheEncountersButton_one": "Cachear {{count}} Pokémon",
+    "cacheEncountersButton_other": "Cachear {{count}} Pokémon",
+    "cachingEncountersButton": "Cacheando encuentros… {{done}}/{{total}}"
   },
   "items": {
     "eyebrow": "Catálogo",

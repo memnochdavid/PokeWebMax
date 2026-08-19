@@ -159,6 +159,37 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
     }
 
     /**
+     * Nombre de cada id, sin tocar `payload` — usado para resolver el `name` de un
+     * Pokémon al cachear su recurso `pokemon-encounters`, que no trae `id`/`name`
+     * propios en su payload (a diferencia del resto de recursos que sí).
+     *
+     * @param int[] $ids
+     * @return array<int, string> nombre indexado por resourceId
+     */
+    public function findNamesByIds(string $resourceType, array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        $rows = $this->createQueryBuilder('p')
+            ->select('p.resourceId', 'p.name')
+            ->andWhere('p.resourceType = :type')
+            ->andWhere('p.resourceId IN (:ids)')
+            ->setParameter('type', $resourceType)
+            ->setParameter('ids', $ids)
+            ->getQuery()
+            ->getArrayResult();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $result[$row['resourceId']] = $row['name'];
+        }
+
+        return $result;
+    }
+
+    /**
      * De una lista de ids candidatos, cuáles ya están cacheados para ese resourceType
      * — usado por el cacheo por lotes para no volver a pedirle a PokeAPI algo que ya
      * se tiene (defensivo: el frontend ya filtra por `cached` antes de mandar el
@@ -544,7 +575,7 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
      * @param string[] $languages
      * @return array{
      *     pokedexes: array<int, array{id:int, name:string, region:string, label:array<string,string>}>,
-     *     versions: array<int, array{id:int, name:string, label:array<string,string>, pokedexNames:string[]}>,
+     *     versions: array<int, array{id:int, name:string, label:array<string,string>, pokedexNames:string[], groupVersions:string[]}>,
      * }
      */
     public function findPokedexBrowserCatalog(array $languages): array
@@ -594,6 +625,18 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
              WHERE resource_type = 'version'"
         )->fetchAllAssociative();
 
+        // Nombres de versión por grupo (ej. 'sword-shield' => ['sword','shield']) — el
+        // filtro "solo exclusivos de este juego" necesita saber quiénes son los
+        // "hermanos" de la versión elegida dentro de su mismo grupo, sin otra consulta:
+        // se reaprovecha esta misma pasada por $versionRows.
+        $versionNamesByGroup = [];
+        foreach ($versionRows as $row) {
+            $versionGroup = json_decode((string) $row['version_group_name']);
+            if ($versionGroup !== null) {
+                $versionNamesByGroup[(string) $versionGroup][] = $row['name'];
+            }
+        }
+
         $versions = [];
         foreach ($versionRows as $row) {
             $versionGroup = json_decode((string) $row['version_group_name']);
@@ -608,10 +651,48 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
                 'name' => $row['name'],
                 'label' => $this->localizedNamesFromJson((string) $row['names_json'], $languages),
                 'pokedexNames' => $pokedexNames,
+                'groupVersions' => $versionGroup !== null ? ($versionNamesByGroup[(string) $versionGroup] ?? [$row['name']]) : [$row['name']],
             ];
         }
 
         return ['pokedexes' => $pokedexes, 'versions' => $versions];
+    }
+
+    /**
+     * Solo para resourceType 'pokemon-encounters': en qué versiones tiene esa especie
+     * al menos un encuentro salvaje real (no solo una zona listada sin detalle) —
+     * alimenta el filtro "solo exclusivos de este juego" (ver
+     * PokemonListService::computeListAll() y .claude/memory/project_pokewebmax_progress.md).
+     * A diferencia de las proyecciones JSON_EXTRACT de `pokemon`/`pokemon-species`
+     * (payloads de 100+KB con movesets completos), el payload de encuentros por
+     * Pokémon es pequeño — se decodifica entero por fila, mismo criterio que
+     * findEvolutionChainDepths().
+     *
+     * @return array<int, string[]> slugs de versión indexados por resourceId (id de Pokémon)
+     */
+    public function findEncounterVersionsBySpecies(): array
+    {
+        $rows = $this->getEntityManager()->getConnection()->executeQuery(
+            "SELECT resource_id, payload FROM pokeapi_resource_cache WHERE resource_type = 'pokemon-encounters'"
+        )->fetchAllAssociative();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $locationAreas = json_decode((string) $row['payload'], true) ?? [];
+            $versions = [];
+            foreach ($locationAreas as $locationArea) {
+                foreach ($locationArea['version_details'] ?? [] as $versionDetail) {
+                    $versionName = $versionDetail['version']['name'] ?? null;
+                    $encounterDetails = $versionDetail['encounter_details'] ?? [];
+                    if ($versionName !== null && $encounterDetails !== []) {
+                        $versions[$versionName] = true;
+                    }
+                }
+            }
+            $result[(int) $row['resource_id']] = array_keys($versions);
+        }
+
+        return $result;
     }
 
     /**

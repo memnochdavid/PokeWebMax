@@ -2080,3 +2080,176 @@ dos siguientes.
 el fix es del mismo tipo que el de `listAll()`, que sí se verificó con timings
 reales, pero David debería confirmar que la vista de lista carga notablemente más
 rápido al navegar de ida y vuelta.
+
+## Selector de Pokédex regional / por juego en la lista — HECHO 2026-08-19
+
+David pidió poder ver la lista con una Pokédex regional en vez de solo la nacional, con
+la posibilidad de elegir tanto por región como por juego concreto. Dos rondas de
+aclaración antes de implementar: mi primera propuesta colapsaba "región" y "juego" en un
+único select de "edición" (etiquetado con el nombre propio de la Pokédex, ej. "Johto
+Original") — David lo rechazó explícitamente: quería que quedase claro que son dos
+filtros DISTINTOS, no una sola cosa. Motivo real, no solo de UI: un mismo juego puede
+repartirse en varias Pokédex a la vez (Espada/Escudo está en `galar` + `isle-of-armor` +
+`crown-tundra` simultáneamente, cada una con su numeración propia), así que "elegir
+juego" no siempre resuelve a una única Pokédex regional y no se puede tratar como sinónimo
+de "elegir edición de una región".
+
+**Estructura final** (4 selects en cascada, `PokedexScopeSelector`):
+1. Nacional / Regional.
+2. (si Regional) Regional / Juego — modo.
+3. (modo Región) Región (Kanto…Paldea) → (modo Juego) Juego (lista plana de ~50
+   versiones).
+4. (solo modo Región, si la región tiene >1 Pokédex) Edición concreta — se autoselecciona
+   sin mostrar este select si solo hay 1 (derivado, sin `useEffect`: ver
+   `activePokedexName` en `usePokemonBrowser.js`).
+
+**Todo el feature se resuelve con datos YA cacheados** (verificado por SQL antes de
+tocar código, cero llamadas nuevas a PokeAPI):
+- `pokemon-species.pokedex_numbers` (por especie, nº de entrada en cada Pokédex que la
+  incluye) — añadido a `findSpeciesSummaries()` (una JSON_EXTRACT más en la query ya
+  existente, no una pasada nueva — misma lección de "Listas lentas" del 2026-08-17) y
+  expuesto como `pokedexNumbers` en cada entrada de `PokemonListService::listAll()`.
+- Nuevo `PokeApiResourceCacheRepository::findPokedexBrowserCatalog()` + `PokemonListService::pokedexCatalog()`
+  (cacheado igual que `listAll()`/`namesById()`) + `GET /api/pokedex-catalog`
+  (`PokedexCatalogController`): junta `pokedex` (region/is_main_series/names) con
+  `version`+`version-group` — el payload de `version-group` YA trae `pokedexes[]`
+  resuelto por PokeAPI, así que el caso multi-dex (Espada/Escudo → 3 Pokédex) sale gratis
+  sin construir ningún índice inverso a mano. Verificado por curl: 32 pokedexes
+  regionales reales, 51 versiones, `sword`→`["galar","isle-of-armor","crown-tundra"]`
+  correcto.
+- `region` (resourceType) NO trae nombre en español en PokeAPI (solo ja/ko/zh/fr/de/it/en,
+  comprobado) — por eso el select de Región reutiliza a mano los mismos valores ES/EN que
+  ya vivían en `utils/generations.js` (`REGION`, con "Teselia" para Unova), ahora también
+  en `utils/pokedexRegions.js` indexado por slug de región en vez de por nº de
+  generación (`generations.js` no se tocó). `pokedex.names` y `version.names` sí traen
+  español real, así que esas etiquetas (edición/juego) vienen del propio catálogo, no
+  hardcodeadas.
+
+**`usePokemonBrowser.js` cambia de binario a composable**: antes, con filtros de
+texto/tipo activos se aplanaba TODO ignorando `activeGeneration`; ahora hay un "ámbito
+base" (generación, o Pokédex regional/juego si hay una activa) sobre el que los filtros
+de texto/tipo siguen aplicando SIEMPRE por encima — con Regional activo, buscar por tipo
+dentro de "Johto Original" ahora filtra dentro de Johto, no de los 1025. Número mostrado
+en la card (`displayNumber`) viene de `pokedexNumbers[pokedexActiva]`; en modo Juego con
+una versión multi-dex (Espada/Escudo) se mantiene el nº nacional a propósito — no hay un
+número regional único válido para las tres Pokédex a la vez, así que no se inventa uno.
+
+**Verificado**: por curl (catálogo + `pokedexNumbers` en `/api/pokemon`, caché en
+caliente 0,02-0,08s tras el rebuild de `findSpeciesSummaries()`) y, esta vez sí, a ojo en
+el navegador por David — primera vez de toda la vida del proyecto que se verifica un
+cambio visual así, sin depender de que Claude lo describa a ciegas (el plugin de Chrome
+sigue sin conectarse desde la sesión de Claude Code todavía, David lo probó él mismo
+manualmente). `oxlint` del proyecto está roto (`Permission denied`, mismo problema de
+permisos de ejecución en `node_modules` que ya se documentó por el filesystem fuseblk),
+así que la única verificación estática fue `php -l` + Vite/HMR compilando limpio.
+
+## Modo de vista Tabla en la lista de Pokémon — HECHO 2026-08-19
+
+David pidió modos de vista alternativos para la lista (empezando por Tabla, "más
+compacto", columnas ordenables). Feature 100% frontend, sin tocar backend ni
+`usePokemonBrowser.js` en su lógica de filtrado — solo reutiliza lo que ya exponía:
+
+- **Ordenación de columnas = mismo `SORTS` de `usePokemonBrowser.js`** (number/name/type/
+  height/weight/captureRate/statsTotal), una sola fuente de verdad con el dropdown
+  "Ordenar por" de `PokemonFilters`. Clicar una cabecera llama a `setSortKey`, o a
+  `toggleSortDirection` si ya era la columna activa — sin estado nuevo en el hook.
+- `frontend/src/components/PokemonTable/` — tabla compacta (sprite 40px, filas
+  clicables que navegan a la ficha, cabeceras sticky).
+- `frontend/src/components/ViewModeToggle/` — segmented control genérico (recibe
+  `modes: [{value, label}]`) a propósito para no rediseñarlo cuando llegue un tercer
+  modo de vista.
+- `frontend/src/hooks/useViewMode.js` — persistencia en localStorage
+  (`pokewebmax:pokemonListViewMode`), mismo criterio try/catch que
+  `ThemeContext`/`LanguageContext` (sin Context propio: hoy solo lo consume
+  `PokemonListPage`, promocionar si un segundo listado lo necesita).
+- `officialArtworkUrl()` (antes una constante local de `PokemonListPage.jsx`) se movió a
+  `utils/spritesHome.js` — la necesitaban tanto la card como la tabla.
+
+**Verificado**: Vite/HMR sin errores, curl a los módulos nuevos devuelve 200 (sin error
+de transform). **No visto a ojo todavía en esta sesión** — pendiente de que David lo
+pruebe en el navegador, igual que el resto de cambios de hoy.
+
+## Filtro "solo exclusivos de este juego" en modo Juego — HECHO 2026-08-19
+
+David pidió, dentro del modo Juego (Espada/Escudo, Rojo/Azul...), poder ver solo los
+Pokémon EXCLUSIVOS de la versión elegida frente a su pareja — hoy se mostraba la unión
+completa de la Pokédex del grupo de versión. Confirmó explícitamente que es sobre
+exclusivos de encuentro salvaje por versión (no "Pokédex base sin DLC", la otra lectura
+que le propuse).
+
+**`pokemon.game_indices` (ya cacheado) NO sirve para esto** — verificado por SQL: Vulpix
+y Growlithe traen 'sword' Y 'shield' idénticos en `game_indices` (ese campo dice en qué
+juegos EXISTE el dato en el ROM, no en cuáles es capturable). La única fuente real es
+`GET /pokemon/{id}/encounters` (sub-recurso de PokeAPI, no uno de los 49 resourceTypes
+listables que ya se cachean genéricamente).
+
+**Pregunta de David a mitad de sesión, importante**: propuso hardcodear los exclusivos a
+mano ("son juegos que ya salieron, no van a cambiar"). Le expliqué el trade-off: mi
+memoria sobre exclusivos por generación tiene riesgo real de error (son muchos, por
+muchos juegos), mientras que cachear vía PokeAPI real es "un click, una vez por juego,
+para siempre" (las filas de `pokeapi_resource_cache` no caducan, a diferencia del
+`cache.app` que sí tiene TTL) — así que el coste de la fuente real es el mismo que
+hardcodear (cero después del primer cacheo) pero sin el riesgo. Eligió seguir con datos
+reales. **La prueba real lo confirmó**: mi suposición de que Vulpix/Growlithe eran
+exclusivos Escudo/Espada resultó FALSA — ambos aparecen en los dos juegos según
+PokeAPI. Si hubiera hardcodeado esa suposición habría sido un dato incorrecto en la app.
+
+**Diseño**: botón CONTEXTUAL en la propia lista (no en `/cache`) — al activar "Solo
+exclusivos" para un juego, si hay Pokémon de esa Pokédex sin encuentros cacheados,
+aparece un banner con botón "Cachear N Pokémon" que solo pide esos ids (cientos, no los
+~1351 totales) — decisión explícita de David tras preguntarle, coherente con "cacheo
+manual, disparado explícitamente".
+
+**Backend**:
+- `PokeApiClient::fetchManyPokemonEncounters()` — mismo patrón concurrente que
+  `fetchManyResources()` pero URL `pokemon/{id}/encounters` (sub-recurso, no
+  `{resourceType}/{id}`).
+- `PokeApiResourceCacheRepository::findNamesByIds()` (resolver nombre para persistir,
+  ya que el payload de encounters no trae `id`/`name` propios) y
+  `findEncounterVersionsBySpecies()` (decodifica el payload completo por fila —a
+  diferencia de `pokemon`/`pokemon-species`, aquí no hay problema de tamaño, mismo
+  criterio que `findEvolutionChainDepths()`).
+- Nuevo `PokemonEncountersCacheService::cacheBatch()` — separado de `PokeApiCacheService`
+  porque el payload no encaja en su modelo `$payload['id']`/`$payload['name']`. **Único
+  sitio de todo el proyecto que invalida `cache.app` (`pokemon_list_all`) explícitamente
+  tras cachear** — el resto de cacheos (`/cache`) aceptan el retraso del TTL de 300s
+  porque el flujo típico es "cachear, visitar la lista después"; aquí el botón vive EN la
+  lista y se espera ver el resultado al instante. Verificado con curl: cache caliente
+  (0,02s) → cachear un Pokémon nuevo → siguiente `/api/pokemon` recalcula al instante
+  (4,7s, sin esperar TTL ni limpiar el pool a mano).
+- `findPokedexBrowserCatalog()` gana `groupVersions` por versión (reaprovecha la misma
+  pasada por `version`, sin consulta nueva) — el frontend calcula los "hermanos" de la
+  versión elegida restándose a sí misma.
+- `computeListAll()` añade `encounterVersions`/`encountersCached` por especie —
+  `encountersCached` existe aparte para no confundir "no exclusivo" con "sin datos
+  todavía" (ver `.claude/memory/feedback_no_silent_data_collapsing.md`).
+- Nuevo `POST /api/pokemon/encounters/cache-batch`.
+
+**Frontend**: `usePokemonBrowser.js` gana `pokedexScopedEntries` (Pokémon del juego
+ANTES de "solo exclusivos", para saber qué ids pedir sin que el propio filtro vacío se
+muerda la cola), `exclusiveOnly`/`hasSiblingVersions`. Checkbox en
+`PokedexScopeSelector` (solo visible si la versión tiene hermanas). Nuevo
+`useCacheEncountersForIds.js` (mismo `BATCH_SIZE` que `cachePokeApiResource.js`,
+exportado desde ahí) + banner con botón en `PokemonListPage`.
+
+**Verificado**: pipeline completo por curl (cacheo, invalidación instantánea, catálogo
+`groupVersions` de sword/shield). Vite/HMR sin errores. **No visto a ojo en el navegador
+en esta sesión** — pendiente de que David lo pruebe.
+
+## Recordar filtros/orden/Pokédex al volver a la lista — HECHO 2026-08-19
+
+David pidió que, al volver a la vista de lista desde donde sea (ficha, /cache...), se
+recuerden los filtros — hasta ahora `usePokemonBrowser` inicializaba todo su estado
+(`filters`, `sortKey`/`sortDirection`, `activeGeneration`, ámbito de Pokédex
+regional/juego, `exclusiveOnly`) con `useState` normal, así que se perdía cada vez que
+`PokemonListPage` se desmontaba al navegar y se remontaba al volver.
+
+**Mismo patrón ya establecido en el proyecto para este problema exacto**:
+`utils/pokemonListCache.js` ya resolvía esto para los DATOS de Pokémon (caché en memoria
+fuera de React, sobrevive al desmontaje, se pierde solo al recargar el navegador). Nuevo
+`utils/pokemonBrowserState.js` hace lo mismo para el ESTADO de navegación (filtros/orden/
+Pokédex elegida): `usePokemonBrowser` lee el estado guardado como valor inicial de cada
+`useState` (`stored?.filters ?? EMPTY_FILTERS`, etc.) y un único `useEffect` lo vuelve a
+guardar en cada cambio. No hace falta tocar ningún setter individual.
+
+**Verificado**: Vite/HMR sin errores. No visto a ojo en el navegador todavía.

@@ -47,7 +47,15 @@
     "modeGame": "By game",
     "regionPlaceholder": "Choose region…",
     "editionPlaceholder": "Choose edition…",
-    "gamePlaceholder": "Choose game…"
+    "gamePlaceholder": "Choose game…",
+    "viewGrid": "Cards",
+    "viewTable": "Table",
+    "exclusiveOnly": "Exclusive to this game only",
+    "exclusiveDataMissing_one": "Missing encounter data for {{count}} Pokémon to know which are exclusive.",
+    "exclusiveDataMissing_other": "Missing encounter data for {{count}} Pokémon to know which are exclusive.",
+    "cacheEncountersButton_one": "Cache {{count}} Pokémon",
+    "cacheEncountersButton_other": "Cache {{count}} Pokémon",
+    "cachingEncountersButton": "Caching encounters… {{done}}/{{total}}"
   },
   "items": {
     "eyebrow": "Catalog",

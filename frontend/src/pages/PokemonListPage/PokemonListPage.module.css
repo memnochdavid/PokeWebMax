@@ -55,6 +55,39 @@
   color: var(--error);
 }
 
+.encountersBanner {
+  margin: 0;
+  padding: 0.7rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--chassis-900);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.encountersButton {
+  cursor: pointer;
+  border: 1px solid var(--signal);
+  border-radius: 0.4rem;
+  padding: 0.35rem 0.8rem;
+  background: transparent;
+  color: var(--signal);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.72rem;
+}
+
+.encountersButton:hover {
+  background: var(--signal);
+  color: var(--signal-contrast);
+}
+
 .empty {
   font-family: var(--font-mono);
   color: var(--text);

@@ -3,17 +3,21 @@ import usePokemonList from '../../hooks/usePokemonList.js'
 import usePokemonBrowser from '../../hooks/usePokemonBrowser.js'
 import usePokemonNames from '../../hooks/usePokemonNames.js'
 import usePokedexCatalog from '../../hooks/usePokedexCatalog.js'
+import useViewMode from '../../hooks/useViewMode.js'
+import useCacheEncountersForIds from '../../hooks/useCacheEncountersForIds.js'
 import { useLanguage } from '../../contexts/LanguageContext.jsx'
 import PokemonCard from '../../components/PokemonCard/PokemonCard.jsx'
+import PokemonTable from '../../components/PokemonTable/PokemonTable.jsx'
 import PokemonFilters from '../../components/PokemonFilters/PokemonFilters.jsx'
 import GenerationPager from '../../components/GenerationPager/GenerationPager.jsx'
 import PokedexScopeSelector from '../../components/PokedexScopeSelector/PokedexScopeSelector.jsx'
+import ViewModeToggle from '../../components/ViewModeToggle/ViewModeToggle.jsx'
 import { capitalize } from '../../utils/pokemonFormat.js'
 import { regionLabel } from '../../utils/pokedexRegions.js'
+import { officialArtworkUrl } from '../../utils/spritesHome.js'
 import styles from './PokemonListPage.module.css'
 
-const officialArtworkUrl = (id) =>
-  `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`
+const VIEW_MODES = ['grid', 'table']
 
 export default function PokemonListPage() {
   const { status, pokemon, error, reload } = usePokemonList()
@@ -46,7 +50,17 @@ export default function PokemonListPage() {
     versionName,
     setVersionName,
     pokedexFilterActive,
+    pokedexScopedEntries,
+    exclusiveOnly,
+    setExclusiveOnly,
+    hasSiblingVersions,
   } = usePokemonBrowser(pokemon, { names, language, pokedexCatalog })
+  const [viewMode, setViewMode] = useViewMode(VIEW_MODES, 'grid')
+  const encountersCache = useCacheEncountersForIds()
+
+  const pendingEncounterIds = exclusiveOnly
+    ? pokedexScopedEntries.filter((entry) => !entry.encountersCached).map((entry) => entry.id)
+    : []
 
   const eyebrow = (() => {
     if (pokedexScope !== 'regional') return t('list.eyebrow')
@@ -81,8 +95,19 @@ export default function PokemonListPage() {
             pokedexOptionsForRegion={pokedexOptionsForRegion}
             versionName={versionName}
             onSetVersionName={setVersionName}
+            hasSiblingVersions={hasSiblingVersions}
+            exclusiveOnly={exclusiveOnly}
+            onSetExclusiveOnly={setExclusiveOnly}
             catalog={pokedexCatalog}
             language={language}
+          />
+          <ViewModeToggle
+            modes={[
+              { value: 'grid', label: t('list.viewGrid') },
+              { value: 'table', label: t('list.viewTable') },
+            ]}
+            value={viewMode}
+            onChange={setViewMode}
           />
           <button type="button" className={styles.reload} onClick={reload} disabled={status === 'loading'}>
             {status === 'loading' ? t('list.loading') : t('list.reload')}
@@ -110,6 +135,29 @@ export default function PokemonListPage() {
             onToggleSortDirection={toggleSortDirection}
           />
 
+          {exclusiveOnly && pendingEncounterIds.length > 0 && encountersCache.status !== 'running' && (
+            <p className={styles.encountersBanner}>
+              {t('list.exclusiveDataMissing', { count: pendingEncounterIds.length })}{' '}
+              <button
+                type="button"
+                className={styles.encountersButton}
+                onClick={() =>
+                  encountersCache.start(pendingEncounterIds, {
+                    onDone: reload,
+                  })
+                }
+              >
+                {t('list.cacheEncountersButton', { count: pendingEncounterIds.length })}
+              </button>
+            </p>
+          )}
+
+          {encountersCache.status === 'running' && (
+            <p className={styles.encountersBanner}>
+              {t('list.cachingEncountersButton', { done: encountersCache.done, total: encountersCache.total })}
+            </p>
+          )}
+
           {!filtering && !pokedexFilterActive && (
             <GenerationPager
               generations={generations}
@@ -120,6 +168,16 @@ export default function PokemonListPage() {
 
           {visible.length === 0 ? (
             <p className={styles.empty}>{t('list.emptyFiltered')}</p>
+          ) : viewMode === 'table' ? (
+            <PokemonTable
+              entries={visible}
+              names={names}
+              language={language}
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSetSortKey={setSortKey}
+              onToggleSortDirection={toggleSortDirection}
+            />
           ) : (
             <ul className={styles.grid}>
               {visible.map((entry) => (

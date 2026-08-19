@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { compareValues } from '../utils/sorting.js'
+import { getStoredBrowserState, setStoredBrowserState } from '../utils/pokemonBrowserState.js'
 
 // Catálogo interno indexado por clave (mismo criterio que TOGGLES en PokemonFilters) —
 // `value(entry, names, language)` es lo que se compara.
@@ -109,34 +110,77 @@ function resolvePokedexNames(mode, pokedexName, versionName, catalog) {
 // el nacional; ahora, con Regional activo, filtrar por tipo dentro de "Johto Original"
 // muestra solo los de Johto, no los 1025 — ver plan de la sesión).
 export default function usePokemonBrowser(pokemonList, { names = {}, language = 'es', pokedexCatalog = EMPTY_CATALOG } = {}) {
-  const [filters, setFilters] = useState(EMPTY_FILTERS)
-  const [activeGeneration, setActiveGeneration] = useState(1)
-  const [sortKey, setSortKey] = useState('number')
-  const [sortDirection, setSortDirection] = useState('asc')
+  // Estado inicial recuperado de pokemonBrowserState.js si PokemonListPage ya se había
+  // montado antes en esta pestaña (ej. volviendo de una ficha) — así no se resetean
+  // filtros/orden/Pokédex elegida en cada ida y vuelta (pedido explícito de David).
+  const stored = getStoredBrowserState()
 
-  const [pokedexScope, setPokedexScopeState] = useState('national') // 'national' | 'regional'
-  const [pokedexMode, setPokedexModeState] = useState('region') // 'region' | 'game'
-  const [pokedexRegion, setPokedexRegionState] = useState('')
-  const [pokedexName, setPokedexName] = useState('')
-  const [versionName, setVersionName] = useState('')
+  const [filters, setFilters] = useState(stored?.filters ?? EMPTY_FILTERS)
+  const [activeGeneration, setActiveGeneration] = useState(stored?.activeGeneration ?? 1)
+  const [sortKey, setSortKey] = useState(stored?.sortKey ?? 'number')
+  const [sortDirection, setSortDirection] = useState(stored?.sortDirection ?? 'asc')
+
+  const [pokedexScope, setPokedexScopeState] = useState(stored?.pokedexScope ?? 'national') // 'national' | 'regional'
+  const [pokedexMode, setPokedexModeState] = useState(stored?.pokedexMode ?? 'region') // 'region' | 'game'
+  const [pokedexRegion, setPokedexRegionState] = useState(stored?.pokedexRegion ?? '')
+  const [pokedexName, setPokedexName] = useState(stored?.pokedexName ?? '')
+  const [versionName, setVersionNameState] = useState(stored?.versionName ?? '')
+  // "Solo exclusivos de este juego" (necesita encuentros cacheados por especie, ver
+  // PokemonListPage — botón contextual) — solo tiene sentido en modo Juego con una
+  // versión elegida que tenga "hermanas" en su grupo (ej. Espada/Escudo). Se resetea
+  // cada vez que cambia el juego elegido, no solo el modo/ámbito.
+  const [exclusiveOnly, setExclusiveOnlyState] = useState(stored?.exclusiveOnly ?? false)
+
+  useEffect(() => {
+    setStoredBrowserState({
+      filters,
+      activeGeneration,
+      sortKey,
+      sortDirection,
+      pokedexScope,
+      pokedexMode,
+      pokedexRegion,
+      pokedexName,
+      versionName,
+      exclusiveOnly,
+    })
+  }, [
+    filters,
+    activeGeneration,
+    sortKey,
+    sortDirection,
+    pokedexScope,
+    pokedexMode,
+    pokedexRegion,
+    pokedexName,
+    versionName,
+    exclusiveOnly,
+  ])
 
   const setPokedexScope = (scope) => {
     setPokedexScopeState(scope)
     setPokedexModeState('region')
     setPokedexRegionState('')
     setPokedexName('')
-    setVersionName('')
+    setVersionNameState('')
+    setExclusiveOnlyState(false)
   }
   const setPokedexMode = (mode) => {
     setPokedexModeState(mode)
     setPokedexRegionState('')
     setPokedexName('')
-    setVersionName('')
+    setVersionNameState('')
+    setExclusiveOnlyState(false)
   }
   const setPokedexRegion = (region) => {
     setPokedexRegionState(region)
     setPokedexName('')
   }
+  const setVersionName = (version) => {
+    setVersionNameState(version)
+    setExclusiveOnlyState(false)
+  }
+  const setExclusiveOnly = (value) => setExclusiveOnlyState(value)
 
   const pokedexOptionsForRegion = useMemo(
     () => pokedexCatalog.pokedexes.filter((p) => p.region === pokedexRegion),
@@ -156,6 +200,27 @@ export default function usePokemonBrowser(pokemonList, { names = {}, language = 
     [pokedexScope, pokedexMode, activePokedexName, versionName, pokedexCatalog],
   )
   const pokedexFilterActive = resolvedPokedexNames.length > 0
+
+  // Pokémon de la Pokédex del juego/región activa, ANTES de "solo exclusivos" y de los
+  // filtros de texto/tipo — lo necesita el banner de la lista para saber a qué ids
+  // pedir encuentros cacheados (tiene que ser la lista completa del juego, no la ya
+  // reducida por exclusiveOnly, que sin datos cacheados empezaría vacía).
+  const pokedexScopedEntries = useMemo(
+    () =>
+      pokedexFilterActive
+        ? pokemonList.filter((entry) => resolvedPokedexNames.some((name) => entry.pokedexNumbers?.[name] != null))
+        : [],
+    [pokemonList, pokedexFilterActive, resolvedPokedexNames],
+  )
+
+  // "Hermanas" de la versión elegida dentro de su mismo grupo (ej. versionName='sword'
+  // → siblingVersions=['shield']) — un Pokémon es exclusivo de `versionName` si tiene
+  // encuentros ahí y en NINGUNA de estas.
+  const { siblingVersions, hasSiblingVersions } = useMemo(() => {
+    const version = pokedexCatalog.versions.find((v) => v.name === versionName)
+    const siblings = (version?.groupVersions ?? []).filter((v) => v !== versionName)
+    return { siblingVersions: siblings, hasSiblingVersions: siblings.length > 0 }
+  }, [pokedexCatalog, versionName])
 
   const generations = useMemo(() => {
     const counts = new Map()
@@ -179,18 +244,42 @@ export default function usePokemonBrowser(pokemonList, { names = {}, language = 
 
   const visible = useMemo(() => {
     const base = pokedexFilterActive
-      ? pokemonList.filter((entry) => resolvedPokedexNames.some((name) => entry.pokedexNumbers?.[name] != null))
+      ? pokedexScopedEntries
       : filtering
         ? pokemonList
         : pokemonList.filter((entry) => entry.generation === activeGeneration)
+    const exclusiveFiltered =
+      pokedexMode === 'game' && exclusiveOnly && versionName && hasSiblingVersions
+        ? base.filter(
+            (entry) =>
+              entry.encounterVersions?.includes(versionName) &&
+              !siblingVersions.some((sibling) => entry.encounterVersions?.includes(sibling)),
+          )
+        : base
     const matched = filtering
-      ? base.filter((entry) => matchesFilters(entry, filters, names[entry.id]?.names[language]))
-      : base
+      ? exclusiveFiltered.filter((entry) => matchesFilters(entry, filters, names[entry.id]?.names[language]))
+      : exclusiveFiltered
     const withNumbers = matched.map((entry) => ({ ...entry, displayNumber: displayNumberFor(entry) }))
     const expanded = filtering ? withNumbers.flatMap((entry) => expandToVariants(entry, filters)) : withNumbers
     return [...expanded].sort(compareBy(sortKey, sortDirection, names, language))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pokemonList, filters, filtering, activeGeneration, pokedexFilterActive, resolvedPokedexNames, names, language, sortKey, sortDirection])
+  }, [
+    pokemonList,
+    pokedexScopedEntries,
+    filters,
+    filtering,
+    activeGeneration,
+    pokedexFilterActive,
+    pokedexMode,
+    exclusiveOnly,
+    versionName,
+    hasSiblingVersions,
+    siblingVersions,
+    names,
+    language,
+    sortKey,
+    sortDirection,
+  ])
 
   const setFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }))
   const resetFilters = () => setFilters(EMPTY_FILTERS)
@@ -221,5 +310,9 @@ export default function usePokemonBrowser(pokemonList, { names = {}, language = 
     versionName,
     setVersionName,
     pokedexFilterActive,
+    pokedexScopedEntries,
+    exclusiveOnly,
+    setExclusiveOnly,
+    hasSiblingVersions,
   }
 }

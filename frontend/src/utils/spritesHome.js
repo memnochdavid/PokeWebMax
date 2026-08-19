@@ -21,3 +21,9 @@ export function spriteHomeUrl(id) {
 
   return `/sprites_home/gen${range[2]}/${String(id).padStart(4, '0')}.png`
 }
+
+// Fallback remoto cuando no hay sprite HOME local descargado — mismo pack "official
+// artwork" de PokeAPI que ya se usaba como `sprite` en PokemonCard/PokemonTable.
+export function officialArtworkUrl(id) {
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`
+}

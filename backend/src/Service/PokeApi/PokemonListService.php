@@ -80,6 +80,7 @@ class PokemonListService
      *     captureRate: ?int, weight: ?int, height: ?int, statsTotal: ?int,
      *     variants: array<int, array{id: int, name: string, kind: string, types: string[]}>,
      *     pokedexNumbers: array<string, int>,
+     *     encounterVersions: string[], encountersCached: bool,
      * }>
      */
     public function listAll(): array
@@ -102,6 +103,7 @@ class PokemonListService
      *     captureRate: ?int, weight: ?int, height: ?int, statsTotal: ?int,
      *     variants: array<int, array{id: int, name: string, kind: string, types: string[]}>,
      *     pokedexNumbers: array<string, int>,
+     *     encounterVersions: string[], encountersCached: bool,
      * }>
      */
     private function computeListAll(): array
@@ -114,9 +116,13 @@ class PokemonListService
         $typesAndMetricsById = $this->repository->findPokemonTypesAndMetricsById();
         $speciesSummaries = $this->repository->findSpeciesSummaries();
         $chainDepths = $this->repository->findEvolutionChainDepths();
+        // Solo para el filtro "solo exclusivos de este juego" — vacío para la inmensa
+        // mayoría de especies hasta que David cachee encuentros desde el botón
+        // contextual de la lista (ver PokemonEncountersCacheService), nunca desde aquí.
+        $encounterVersionsById = $this->repository->findEncounterVersionsBySpecies();
 
         return array_map(
-            function (array $entry) use ($cachedFetchedAt, $typesAndMetricsById, $speciesSummaries, $chainDepths) {
+            function (array $entry) use ($cachedFetchedAt, $typesAndMetricsById, $speciesSummaries, $chainDepths, $encounterVersionsById) {
                 $fetchedAt = $cachedFetchedAt[$entry['id']] ?? null;
                 $summary = $speciesSummaries[$entry['id']] ?? null;
                 $evolutionChainId = $summary['evolutionChainId'] ?? null;
@@ -145,6 +151,8 @@ class PokemonListService
                     'statsTotal' => $metrics['statsTotal'] ?? null,
                     'variants' => $variants,
                     'pokedexNumbers' => $summary['pokedexNumbers'] ?? [],
+                    'encounterVersions' => $encounterVersionsById[$entry['id']] ?? [],
+                    'encountersCached' => isset($encounterVersionsById[$entry['id']]),
                 ];
             },
             $entries,
@@ -159,7 +167,7 @@ class PokemonListService
      *
      * @return array{
      *     pokedexes: array<int, array{id:int, name:string, region:string, label:array<string,string>}>,
-     *     versions: array<int, array{id:int, name:string, label:array<string,string>, pokedexNames:string[]}>,
+     *     versions: array<int, array{id:int, name:string, label:array<string,string>, pokedexNames:string[], groupVersions:string[]}>,
      * }
      */
     public function pokedexCatalog(): array

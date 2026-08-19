@@ -4,7 +4,7 @@ import axios from 'axios'
 // paralelo (ver PokeApiClient::fetchManyResources), así que esto no es "cuántos caben
 // en una respuesta" sino "cuánta concurrencia lanzamos de una vez". Por debajo del
 // límite defensivo del backend (100) y de max_host_connections (30) para dejar margen.
-const BATCH_SIZE = 40
+export const BATCH_SIZE = 40
 
 // Cachea todo lo pendiente de un resourceType, en lotes concurrentes en vez de un
 // POST por item. Compartido entre useCacheAllResource (un único recurso, con su

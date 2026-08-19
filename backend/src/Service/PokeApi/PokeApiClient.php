@@ -113,6 +113,39 @@ class PokeApiClient
         return $results;
     }
 
+    /**
+     * Igual que fetchManyResources() pero para `pokemon/{id}/encounters` — un
+     * sub-recurso de `pokemon`, no un resourceType propio de PokeAPI (sin `id`/`name`
+     * en el payload, que es solo una lista de zonas de encuentro), así que no encaja en
+     * el patrón `{resourceType}/{id}` del resto de métodos de esta clase.
+     *
+     * @param int[] $ids
+     * @return array<int, ?array> payload indexado por id de Pokémon; null si dio 404
+     */
+    public function fetchManyPokemonEncounters(array $ids): array
+    {
+        $responses = [];
+        foreach ($ids as $id) {
+            $responses[$id] = $this->httpClient->request('GET', self::BASE_URL . 'pokemon/' . $id . '/encounters');
+        }
+
+        $results = [];
+        foreach ($responses as $id => $response) {
+            try {
+                $results[$id] = $response->toArray();
+            } catch (ClientExceptionInterface $e) {
+                if ($e->getResponse()->getStatusCode() === 404) {
+                    $results[$id] = null;
+                    continue;
+                }
+
+                throw $e;
+            }
+        }
+
+        return $results;
+    }
+
     private function get(string $resourceType, string $idOrName): array
     {
         try {
