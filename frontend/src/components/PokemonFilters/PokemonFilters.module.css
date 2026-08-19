@@ -138,3 +138,23 @@
   color: var(--text);
   opacity: 0.75;
 }
+
+@media (max-width: 600px) {
+  .searchRow {
+    flex-direction: column;
+  }
+
+  .search,
+  .select {
+    width: 100%;
+  }
+
+  .sortGroup {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sortGroup .select {
+    width: 100%;
+  }
+}

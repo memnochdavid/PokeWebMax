@@ -98,7 +98,7 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
   gap: 1rem;
 }
 
@@ -188,4 +188,16 @@
 .heldChip:hover {
   border-color: var(--signal);
   color: var(--signal);
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 1.25rem 1rem;
+  }
+
+  .hero {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
 }

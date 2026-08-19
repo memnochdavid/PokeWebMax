@@ -96,9 +96,25 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(18rem, 100%), 1fr));
   gap: 1rem;
   list-style: none;
   padding: 0;
   margin: 0;
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 1.25rem;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .headerControls {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }

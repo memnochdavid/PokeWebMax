@@ -82,9 +82,30 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr));
   gap: 0.65rem;
   list-style: none;
   padding: 0;
   margin: 0;
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 1.25rem;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search,
+  .pocketSelect {
+    width: 100%;
+  }
 }

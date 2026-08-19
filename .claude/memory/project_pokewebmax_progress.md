@@ -2253,3 +2253,51 @@ Pokédex elegida): `usePokemonBrowser` lee el estado guardado como valor inicial
 guardar en cada cambio. No hace falta tocar ningún setter individual.
 
 **Verificado**: Vite/HMR sin errores. No visto a ojo en el navegador todavía.
+
+## Pasada de responsive design en toda la app — HECHO 2026-08-19
+
+David pidió hacer toda la app "mucho más responsive" (confirmado por él: alcance
+completo, no solo la lista). Auditoría previa (agente Explore + lectura directa de CSS)
+antes de tocar nada: el estado real era mejor de lo esperado — casi todo ya usaba
+`flex-wrap`. Solo 3 problemas reales:
+
+1. **Ningún archivo tenía `@media` propio salvo `PokemonFichaPage.module.css`** (900px,
+   ya existente). Resto de páginas/componentes sin ningún breakpoint.
+2. **Bug real de overflow horizontal en móviles muy estrechos** (~320-360px): 5 sitios
+   con `grid-template-columns: repeat(auto-fill/auto-fit, minmax(Xrem, 1fr))` —
+   `minmax()` fuerza esa anchura mínima aunque el contenedor sea más estrecho.
+3. `ItemFichaPage`'s `.hero` (icono fijo 8rem + texto en fila) sin ningún `@media`.
+
+**Deliberadamente fuera de alcance**: la nav (`App.module.css`) es solo 3 enlaces + 2
+botones de idioma + toggle de tema, ya reparte bien con `flex-wrap` — no se le puso
+hamburguesa (habría sido una abstracción de más para su tamaño real).
+`PokemonFichaPage.module.css` tiene un historial documentado de bugs de layout frágiles
+(`.content`/`max-height`, ver secciones anteriores de este mismo archivo) — **NO se tocó
+su `.layout`/`.content`/`.heroBands`/breakpoint de 900px**, solo las 2 líneas `minmax`
+del punto 2 (cambio aislado, no interactúa con esa lógica de alturas).
+
+**Fix de grids** (5 sitios, mismo patrón): `minmax(Xrem, 1fr)` →
+`minmax(min(Xrem, 100%), 1fr)` en `PokemonListPage` (18rem), `ItemsListPage` (15rem),
+`ItemFichaPage` (20rem) y los 2 grids de `PokemonFichaPage` (260px/280px). Técnica CSS
+estándar — cero cambio visual en desktop, evita el desbordamiento por debajo de esa
+anchura.
+
+**Nuevo breakpoint `600px`** (no existía en el proyecto, reutilizado en todos los sitios
+de abajo): filas de controles pasan a columna a ancho completo, padding de página
+reducido a `1.25rem`.
+- `PokemonListPage.module.css`: `.header`/`.headerControls` a columna.
+- `PokedexScopeSelector.module.css`: `.row` a columna, `.select` a `width:100%`.
+- `PokemonFilters.module.css`: `.searchRow`/`.sortGroup` a columna, selects/search a
+  `width:100%` (`.toggleRow`/`.evoGroup` sin cambios, ya envuelven bien con píldoras
+  pequeñas).
+- `ItemsListPage.module.css`: `.filters` a columna, mismo criterio.
+- `CacheAllPage.module.css`: `.rowHeader` gana `flex-wrap: wrap` (no lo tenía).
+- `ItemFichaPage.module.css`: nuevo — `.hero` a columna (icono centrado encima del
+  texto), único sitio de la app sin NINGÚN `@media` antes de esta pasada.
+
+**Verificado**: Vite/HMR sin errores en los 12 archivos tocados, todos los `.module.css`
+sirven 200 sin error de transform. **No visto a ojo en el navegador** (sin
+`claude-in-chrome` conectado en esta sesión) — pendiente de que David lo pruebe con
+devtools en modo responsive (320/375/768px) o desde el móvil, y que confirme
+específicamente que `PokemonFichaPage` no cambió nada visualmente en desktop/tablet
+(el único cambio ahí son las 2 líneas `minmax`).

@@ -60,6 +60,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .rowLabel {
@@ -219,4 +220,10 @@
 .miniButton:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 1.25rem;
+  }
 }
