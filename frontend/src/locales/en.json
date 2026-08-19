@@ -40,7 +40,14 @@
     "loading": "Loading…",
     "reload": "Reload",
     "empty": "No Pokémon cached yet.",
-    "emptyFiltered": "No Pokémon match these filters."
+    "emptyFiltered": "No Pokémon match these filters.",
+    "scopeNational": "National",
+    "scopeRegional": "Regional",
+    "modeRegion": "By region",
+    "modeGame": "By game",
+    "regionPlaceholder": "Choose region…",
+    "editionPlaceholder": "Choose edition…",
+    "gamePlaceholder": "Choose game…"
   },
   "items": {
     "eyebrow": "Catalog",

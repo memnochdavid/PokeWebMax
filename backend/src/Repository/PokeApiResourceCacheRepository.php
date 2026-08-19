@@ -205,7 +205,8 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
                     JSON_EXTRACT(payload, '$.is_mythical') AS is_mythical,
                     JSON_EXTRACT(payload, '$.varieties') AS varieties_json,
                     JSON_EXTRACT(payload, '$.evolution_chain.url') AS evolution_chain_url,
-                    JSON_EXTRACT(payload, '$.capture_rate') AS capture_rate
+                    JSON_EXTRACT(payload, '$.capture_rate') AS capture_rate,
+                    JSON_EXTRACT(payload, '$.pokedex_numbers') AS pokedex_numbers_json
              FROM pokeapi_resource_cache
              WHERE resource_type = 'pokemon-species'"
         )->fetchAllAssociative();
@@ -216,6 +217,7 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
             $evolutionChainUrl = json_decode((string) $row['evolution_chain_url']);
             $varieties = json_decode((string) $row['varieties_json'], true) ?? [];
             $captureRate = json_decode((string) $row['capture_rate']);
+            $pokedexNumbers = json_decode((string) $row['pokedex_numbers_json'], true) ?? [];
 
             // Variedades especiales (mega/gigamax/regional) con su propio id de
             // `pokemon` — antes solo se guardaba un booleano "¿tiene mega?" y se
@@ -237,6 +239,21 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
                 ];
             }
 
+            // Nº de entrada de la especie en cada Pokédex regional/nacional en la que
+            // aparece (ej. 'national' => 1, 'original-johto' => 226) — alimenta el
+            // selector de Pokédex regional/por juego de la vista de lista (ver
+            // PokemonListService::pokedexCatalog()). Se saca aquí, no en una consulta
+            // aparte, por el mismo motivo que el resto de este método: evitar una
+            // segunda pasada por el payload completo de `pokemon-species`.
+            $pokedexNumbersById = [];
+            foreach ($pokedexNumbers as $entry) {
+                $pokedexSlug = $entry['pokedex']['name'] ?? null;
+                $entryNumber = $entry['entry_number'] ?? null;
+                if ($pokedexSlug !== null && $entryNumber !== null) {
+                    $pokedexNumbersById[$pokedexSlug] = (int) $entryNumber;
+                }
+            }
+
             $result[(int) $row['resource_id']] = [
                 'generation' => $generationUrl !== null ? PokeApiUrl::idFromUrl((string) $generationUrl) : null,
                 'legendary' => $this->decodeJsonBool($row['is_legendary']),
@@ -247,6 +264,7 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
                 'evolutionChainId' => $evolutionChainUrl !== null ? PokeApiUrl::idFromUrl((string) $evolutionChainUrl) : null,
                 'captureRate' => $captureRate !== null ? (int) $captureRate : null,
                 'variants' => $variants,
+                'pokedexNumbers' => $pokedexNumbersById,
             ];
         }
 
@@ -511,5 +529,106 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
         }
 
         return $result;
+    }
+
+    /**
+     * Catálogo de Pokédex regionales + juegos para el selector de la vista de lista
+     * (Nacional/Regional → Región/Juego → edición o juego concreto). Tres consultas
+     * pequeñas (36 filas 'pokedex', 53 'version', 32 'version-group' — payloads chicos,
+     * nada que ver con el coste de leer `pokemon`/`pokemon-species` completos, ver
+     * findPokemonTypesAndMetricsById()). El propio payload de `version-group` ya trae
+     * `pokedexes[]` resuelto por PokeAPI (qué Pokédex usa ese grupo de juegos — a veces
+     * más de una a la vez, ej. 'sword-shield' → galar + isle-of-armor + crown-tundra),
+     * así que no hace falta construir un índice inverso a mano.
+     *
+     * @param string[] $languages
+     * @return array{
+     *     pokedexes: array<int, array{id:int, name:string, region:string, label:array<string,string>}>,
+     *     versions: array<int, array{id:int, name:string, label:array<string,string>, pokedexNames:string[]}>,
+     * }
+     */
+    public function findPokedexBrowserCatalog(array $languages): array
+    {
+        $pokedexRows = $this->getEntityManager()->getConnection()->executeQuery(
+            "SELECT resource_id, name,
+                    JSON_EXTRACT(payload, '$.region.name') AS region_name,
+                    JSON_EXTRACT(payload, '$.is_main_series') AS is_main_series,
+                    JSON_EXTRACT(payload, '$.names') AS names_json
+             FROM pokeapi_resource_cache
+             WHERE resource_type = 'pokedex'"
+        )->fetchAllAssociative();
+
+        $pokedexes = [];
+        foreach ($pokedexRows as $row) {
+            $region = json_decode((string) $row['region_name']);
+            // Descarta la nacional (region null) y recursos no-principales como
+            // conquest-gallery/champions (is_main_series false) — no participan del
+            // selector Regional/Juego.
+            if ($region === null || !$this->decodeJsonBool($row['is_main_series'])) {
+                continue;
+            }
+            $pokedexes[] = [
+                'id' => (int) $row['resource_id'],
+                'name' => $row['name'],
+                'region' => (string) $region,
+                'label' => $this->localizedNamesFromJson((string) $row['names_json'], $languages),
+            ];
+        }
+
+        $versionGroupRows = $this->getEntityManager()->getConnection()->executeQuery(
+            "SELECT name, JSON_EXTRACT(payload, '$.pokedexes[*].name') AS pokedex_names_json
+             FROM pokeapi_resource_cache
+             WHERE resource_type = 'version-group'"
+        )->fetchAllAssociative();
+
+        $pokedexNamesByGroup = [];
+        foreach ($versionGroupRows as $row) {
+            $pokedexNamesByGroup[$row['name']] = json_decode((string) $row['pokedex_names_json'], true) ?? [];
+        }
+
+        $versionRows = $this->getEntityManager()->getConnection()->executeQuery(
+            "SELECT resource_id, name,
+                    JSON_EXTRACT(payload, '$.version_group.name') AS version_group_name,
+                    JSON_EXTRACT(payload, '$.names') AS names_json
+             FROM pokeapi_resource_cache
+             WHERE resource_type = 'version'"
+        )->fetchAllAssociative();
+
+        $versions = [];
+        foreach ($versionRows as $row) {
+            $versionGroup = json_decode((string) $row['version_group_name']);
+            $pokedexNames = $versionGroup !== null ? ($pokedexNamesByGroup[(string) $versionGroup] ?? []) : [];
+            // Sin Pokédex asociada (spin-offs como Colosseum/XD) no sirve para este
+            // selector, que filtra Pokémon justamente por pertenencia a una Pokédex.
+            if ($pokedexNames === []) {
+                continue;
+            }
+            $versions[] = [
+                'id' => (int) $row['resource_id'],
+                'name' => $row['name'],
+                'label' => $this->localizedNamesFromJson((string) $row['names_json'], $languages),
+                'pokedexNames' => $pokedexNames,
+            ];
+        }
+
+        return ['pokedexes' => $pokedexes, 'versions' => $versions];
+    }
+
+    /**
+     * @param string[] $languages
+     * @return array<string, string> nombre por idioma
+     */
+    private function localizedNamesFromJson(string $namesJson, array $languages): array
+    {
+        $names = json_decode($namesJson, true) ?? [];
+        $byLanguage = [];
+        foreach ($names as $entry) {
+            $lang = $entry['language']['name'] ?? null;
+            if ($lang !== null && in_array($lang, $languages, true)) {
+                $byLanguage[$lang] = $entry['name'];
+            }
+        }
+
+        return $byLanguage;
     }
 }

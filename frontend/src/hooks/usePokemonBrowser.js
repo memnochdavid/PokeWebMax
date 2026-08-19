@@ -4,7 +4,7 @@ import { compareValues } from '../utils/sorting.js'
 // Catálogo interno indexado por clave (mismo criterio que TOGGLES en PokemonFilters) —
 // `value(entry, names, language)` es lo que se compara.
 export const SORTS = {
-  number: { labelKey: 'filters.sortNumber', value: (entry) => entry.id },
+  number: { labelKey: 'filters.sortNumber', value: (entry) => entry.displayNumber ?? entry.id },
   name: {
     labelKey: 'filters.sortName',
     value: (entry, names, language) => names[entry.id]?.names[language] ?? entry.name,
@@ -84,15 +84,78 @@ function matchesFilters(entry, filters, displayName) {
   return true
 }
 
+const EMPTY_CATALOG = { pokedexes: [], versions: [] }
+
+// Ámbito Nacional/Regional (por región o por juego, ver PokedexScopeSelector y
+// .claude/memory/project_pokewebmax_progress.md) — resuelve a la lista de nombres de
+// Pokédex (`entry.pokedexNumbers` keys) que hay que exigir en cada Pokémon. En modo
+// juego puede ser más de una a la vez (ej. Espada/Escudo → galar + isle-of-armor +
+// crown-tundra), por eso siempre es un array, no un único nombre.
+function resolvePokedexNames(mode, pokedexName, versionName, catalog) {
+  if (mode === 'region') {
+    return pokedexName ? [pokedexName] : []
+  }
+  const version = catalog.versions.find((v) => v.name === versionName)
+  return version?.pokedexNames ?? []
+}
+
 // Navegación por generación (lazy: solo se renderiza una generación a la vez) que
 // cambia a una lista plana con todos los resultados en cuanto hay algún filtro o
 // búsqueda activa — mismo patrón que el paginador de generaciones del Android de
-// referencia (ver GenerationPagerScreen en Dexter).
-export default function usePokemonBrowser(pokemonList, { names = {}, language = 'es' } = {}) {
+// referencia (ver GenerationPagerScreen en Dexter). Con un ámbito Regional/Juego activo
+// pasa lo mismo: se aplana (no tiene sentido paginar por generación una Pokédex que ya
+// es de por sí una región/juego concreto), y los filtros de texto/tipo/etc. se aplican
+// SIEMPRE por encima de ese ámbito (antes ignoraban `activeGeneration` y aplanaban todo
+// el nacional; ahora, con Regional activo, filtrar por tipo dentro de "Johto Original"
+// muestra solo los de Johto, no los 1025 — ver plan de la sesión).
+export default function usePokemonBrowser(pokemonList, { names = {}, language = 'es', pokedexCatalog = EMPTY_CATALOG } = {}) {
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [activeGeneration, setActiveGeneration] = useState(1)
   const [sortKey, setSortKey] = useState('number')
   const [sortDirection, setSortDirection] = useState('asc')
+
+  const [pokedexScope, setPokedexScopeState] = useState('national') // 'national' | 'regional'
+  const [pokedexMode, setPokedexModeState] = useState('region') // 'region' | 'game'
+  const [pokedexRegion, setPokedexRegionState] = useState('')
+  const [pokedexName, setPokedexName] = useState('')
+  const [versionName, setVersionName] = useState('')
+
+  const setPokedexScope = (scope) => {
+    setPokedexScopeState(scope)
+    setPokedexModeState('region')
+    setPokedexRegionState('')
+    setPokedexName('')
+    setVersionName('')
+  }
+  const setPokedexMode = (mode) => {
+    setPokedexModeState(mode)
+    setPokedexRegionState('')
+    setPokedexName('')
+    setVersionName('')
+  }
+  const setPokedexRegion = (region) => {
+    setPokedexRegionState(region)
+    setPokedexName('')
+  }
+
+  const pokedexOptionsForRegion = useMemo(
+    () => pokedexCatalog.pokedexes.filter((p) => p.region === pokedexRegion),
+    [pokedexCatalog, pokedexRegion],
+  )
+  // Si la región solo tiene una Pokédex, se usa directamente sin obligar a elegirla en
+  // un 4º select (ver PokedexScopeSelector) — puramente derivado, no hay estado que
+  // sincronizar a mano.
+  const activePokedexName =
+    pokedexName || (pokedexOptionsForRegion.length === 1 ? pokedexOptionsForRegion[0].name : '')
+
+  const resolvedPokedexNames = useMemo(
+    () =>
+      pokedexScope === 'regional'
+        ? resolvePokedexNames(pokedexMode, activePokedexName, versionName, pokedexCatalog)
+        : [],
+    [pokedexScope, pokedexMode, activePokedexName, versionName, pokedexCatalog],
+  )
+  const pokedexFilterActive = resolvedPokedexNames.length > 0
 
   const generations = useMemo(() => {
     const counts = new Map()
@@ -105,13 +168,29 @@ export default function usePokemonBrowser(pokemonList, { names = {}, language = 
 
   const filtering = hasActiveFilters(filters)
 
+  const displayNumberFor = (entry) => {
+    if (!pokedexFilterActive) return entry.id
+    // Un juego puede repartirse en varias Pokédex a la vez (ej. Espada/Escudo): no hay
+    // un número regional único y válido para las tres, así que se mantiene el nacional
+    // en vez de inventar uno — ver plan de la sesión.
+    if (resolvedPokedexNames.length !== 1) return entry.id
+    return entry.pokedexNumbers?.[resolvedPokedexNames[0]] ?? entry.id
+  }
+
   const visible = useMemo(() => {
-    const base = filtering
-      ? pokemonList.filter((entry) => matchesFilters(entry, filters, names[entry.id]?.names[language]))
-      : pokemonList.filter((entry) => entry.generation === activeGeneration)
-    const expanded = filtering ? base.flatMap((entry) => expandToVariants(entry, filters)) : base
+    const base = pokedexFilterActive
+      ? pokemonList.filter((entry) => resolvedPokedexNames.some((name) => entry.pokedexNumbers?.[name] != null))
+      : filtering
+        ? pokemonList
+        : pokemonList.filter((entry) => entry.generation === activeGeneration)
+    const matched = filtering
+      ? base.filter((entry) => matchesFilters(entry, filters, names[entry.id]?.names[language]))
+      : base
+    const withNumbers = matched.map((entry) => ({ ...entry, displayNumber: displayNumberFor(entry) }))
+    const expanded = filtering ? withNumbers.flatMap((entry) => expandToVariants(entry, filters)) : withNumbers
     return [...expanded].sort(compareBy(sortKey, sortDirection, names, language))
-  }, [pokemonList, filters, filtering, activeGeneration, names, language, sortKey, sortDirection])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pokemonList, filters, filtering, activeGeneration, pokedexFilterActive, resolvedPokedexNames, names, language, sortKey, sortDirection])
 
   const setFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }))
   const resetFilters = () => setFilters(EMPTY_FILTERS)
@@ -130,5 +209,17 @@ export default function usePokemonBrowser(pokemonList, { names = {}, language = 
     sortDirection,
     toggleSortDirection,
     visible,
+    pokedexScope,
+    setPokedexScope,
+    pokedexMode,
+    setPokedexMode,
+    pokedexRegion,
+    setPokedexRegion,
+    pokedexName: activePokedexName,
+    setPokedexName,
+    pokedexOptionsForRegion,
+    versionName,
+    setVersionName,
+    pokedexFilterActive,
   }
 }

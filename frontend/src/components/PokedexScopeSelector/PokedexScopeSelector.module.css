@@ -1,0 +1,21 @@
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.select {
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-h);
+  background: var(--chassis-800);
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  padding: 0.55rem 0.7rem;
+  min-width: 9rem;
+}
+
+.select:focus {
+  border-color: var(--signal);
+}

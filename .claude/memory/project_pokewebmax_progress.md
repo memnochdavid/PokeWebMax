@@ -2057,3 +2057,26 @@ página en una sesión nueva, comprobar primero si `claude-in-chrome` ya está
 disponible** — sería la primera vez en toda la vida de este proyecto que se puede
 verificar un cambio visual a ojo en vez de a ciegas, y esta página en concreto lo
 necesita más que ninguna otra dado el historial de esta sesión.
+
+## `/api/pokemon/names` sin cachear — mismo bug que "Listas lentas" pero en el hermano — HECHO 2026-08-19
+
+David reportó que la vista de lista tardaba mucho en cargar. `/api/pokemon` ya iba
+rápido (0,03-0,08s) por el fix de caché computada del 2026-08-17 (ver sección
+"Coherencia de layout..." arriba), pero `PokemonListService::namesById()` — que
+alimenta `GET /api/pokemon/names`, consumido por `usePokemonNames()` sin caché
+cliente en `PokemonListPage`, `PokemonFichaPage` e `ItemFichaPage` — se quedó fuera de
+ese fix. Mismo problema exacto (`JSON_EXTRACT` obliga a leer el `payload` completo de
+cada fila de `pokemon-species` y `pokemon`): ~2s en cada mount de esas 3 páginas,
+siempre en frío porque no había ninguna capa de caché de por medio. Confirmado con
+`curl` antes del fix (2,0s constante en 3 intentos seguidos).
+
+**Fix**: envuelto `namesById()` en `$this->cache->get('pokemon_names_by_id', ...)`
+con el mismo `LIST_CACHE_TTL_SECONDS` (300s) que `listAll()` — mismo pool `cache.app`,
+mismo aviso de que `cache:clear` no lo vacía (hace falta `cache:pool:clear cache.app`).
+Verificado con `cache:pool:clear` + 3 curls: 2,0s (frío) → 0,02-0,03s (caliente) en las
+dos siguientes.
+
+**Pendiente de verificar a ojo en navegador** (sin `claude-in-chrome` en esta sesión) —
+el fix es del mismo tipo que el de `listAll()`, que sí se verificó con timings
+reales, pero David debería confirmar que la vista de lista carga notablemente más
+rápido al navegar de ida y vuelta.

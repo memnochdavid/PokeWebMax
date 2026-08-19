@@ -40,7 +40,14 @@
     "loading": "Cargando…",
     "reload": "Recargar",
     "empty": "Todavía no hay ningún Pokémon cacheado.",
-    "emptyFiltered": "Ningún Pokémon coincide con estos filtros."
+    "emptyFiltered": "Ningún Pokémon coincide con estos filtros.",
+    "scopeNational": "Nacional",
+    "scopeRegional": "Regional",
+    "modeRegion": "Por región",
+    "modeGame": "Por juego",
+    "regionPlaceholder": "Elegir región…",
+    "editionPlaceholder": "Elegir edición…",
+    "gamePlaceholder": "Elegir juego…"
   },
   "items": {
     "eyebrow": "Catálogo",

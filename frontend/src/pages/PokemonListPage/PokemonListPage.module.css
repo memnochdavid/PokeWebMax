@@ -19,6 +19,13 @@
   margin-top: 0.2rem;
 }
 
+.headerControls {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
 .reload {
   cursor: pointer;
   border: 1px solid var(--line);

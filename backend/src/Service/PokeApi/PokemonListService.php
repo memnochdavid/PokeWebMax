@@ -54,15 +54,22 @@ class PokemonListService
      */
     public function namesById(): array
     {
-        $names = $this->repository->findSpeciesLocalizedNames(self::SUPPORTED_LANGUAGES);
-        $typesById = $this->repository->findPokemonTypesById();
+        return $this->cache->get(
+            'pokemon_names_by_id',
+            function (ItemInterface $item) {
+                $item->expiresAfter(self::LIST_CACHE_TTL_SECONDS);
 
-        $result = [];
-        foreach ($names as $id => $localized) {
-            $result[$id] = ['names' => $localized, 'types' => $typesById[$id] ?? []];
-        }
+                $names = $this->repository->findSpeciesLocalizedNames(self::SUPPORTED_LANGUAGES);
+                $typesById = $this->repository->findPokemonTypesById();
 
-        return $result;
+                $result = [];
+                foreach ($names as $id => $localized) {
+                    $result[$id] = ['names' => $localized, 'types' => $typesById[$id] ?? []];
+                }
+
+                return $result;
+            },
+        );
     }
 
     /**
@@ -72,6 +79,7 @@ class PokemonListService
      *     hasMega: bool, hasGmax: bool, hasRegional: bool, evolutionStages: ?int,
      *     captureRate: ?int, weight: ?int, height: ?int, statsTotal: ?int,
      *     variants: array<int, array{id: int, name: string, kind: string, types: string[]}>,
+     *     pokedexNumbers: array<string, int>,
      * }>
      */
     public function listAll(): array
@@ -93,6 +101,7 @@ class PokemonListService
      *     hasMega: bool, hasGmax: bool, hasRegional: bool, evolutionStages: ?int,
      *     captureRate: ?int, weight: ?int, height: ?int, statsTotal: ?int,
      *     variants: array<int, array{id: int, name: string, kind: string, types: string[]}>,
+     *     pokedexNumbers: array<string, int>,
      * }>
      */
     private function computeListAll(): array
@@ -135,9 +144,33 @@ class PokemonListService
                     'height' => $metrics['height'] ?? null,
                     'statsTotal' => $metrics['statsTotal'] ?? null,
                     'variants' => $variants,
+                    'pokedexNumbers' => $summary['pokedexNumbers'] ?? [],
                 ];
             },
             $entries,
+        );
+    }
+
+    /**
+     * Catálogo de Pokédex regionales + juegos para el selector Nacional/Regional de la
+     * vista de lista (ver PokeApiResourceCacheRepository::findPokedexBrowserCatalog()).
+     * Mismo criterio de caché que listAll()/namesById(): resultado ya computado, TTL
+     * corto porque depende de qué haya cacheado localmente el propio David.
+     *
+     * @return array{
+     *     pokedexes: array<int, array{id:int, name:string, region:string, label:array<string,string>}>,
+     *     versions: array<int, array{id:int, name:string, label:array<string,string>, pokedexNames:string[]}>,
+     * }
+     */
+    public function pokedexCatalog(): array
+    {
+        return $this->cache->get(
+            'pokedex_catalog',
+            function (ItemInterface $item) {
+                $item->expiresAfter(self::LIST_CACHE_TTL_SECONDS);
+
+                return $this->repository->findPokedexBrowserCatalog(self::SUPPORTED_LANGUAGES);
+            },
         );
     }
 }

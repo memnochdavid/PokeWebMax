@@ -6,7 +6,7 @@ import { spriteHomeUrl } from '../../utils/spritesHome.js'
 import { capitalize, formatPokedexNumber } from '../../utils/pokemonFormat.js'
 import styles from './PokemonCard.module.css'
 
-export default function PokemonCard({ id, name, displayName, sprite, types = [] }) {
+export default function PokemonCard({ id, name, displayName, sprite, types = [], number }) {
   const image = useImageFallback(spriteHomeUrl(id), sprite)
 
   const [color1, color2] = types.length > 0
@@ -17,7 +17,7 @@ export default function PokemonCard({ id, name, displayName, sprite, types = [] 
 
   return (
     <Link to={`/ficha/${id}`} className={styles.card} style={background}>
-      <span className={styles.number}>{formatPokedexNumber(id)}</span>
+      <span className={styles.number}>{formatPokedexNumber(number ?? id)}</span>
       <div className={`${styles.spriteWrap} hud-frame hud-frame--hover`} style={{ color: color1 }}>
         <img
           className={styles.sprite}
