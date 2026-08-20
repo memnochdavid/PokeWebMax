@@ -55,7 +55,7 @@ export default function PokemonListPage() {
     setExclusiveOnly,
     hasSiblingVersions,
   } = usePokemonBrowser(pokemon, { names, language, pokedexCatalog })
-  const [viewMode, setViewMode] = useViewMode(VIEW_MODES, 'grid')
+  const [viewMode, setViewMode] = useViewMode(VIEW_MODES, 'grid', 'pokewebmax:pokemonListViewMode')
   const encountersCache = useCacheEncountersForIds()
 
   const pendingEncounterIds = exclusiveOnly
@@ -82,37 +82,6 @@ export default function PokemonListPage() {
           <span className="eyebrow">{eyebrow}</span>
           <h1 className={styles.title}>{t('list.title')}</h1>
         </div>
-        <div className={styles.headerControls}>
-          <PokedexScopeSelector
-            pokedexScope={pokedexScope}
-            onSetScope={setPokedexScope}
-            pokedexMode={pokedexMode}
-            onSetMode={setPokedexMode}
-            pokedexRegion={pokedexRegion}
-            onSetRegion={setPokedexRegion}
-            pokedexName={pokedexName}
-            onSetPokedexName={setPokedexName}
-            pokedexOptionsForRegion={pokedexOptionsForRegion}
-            versionName={versionName}
-            onSetVersionName={setVersionName}
-            hasSiblingVersions={hasSiblingVersions}
-            exclusiveOnly={exclusiveOnly}
-            onSetExclusiveOnly={setExclusiveOnly}
-            catalog={pokedexCatalog}
-            language={language}
-          />
-          <ViewModeToggle
-            modes={[
-              { value: 'grid', label: t('list.viewGrid') },
-              { value: 'table', label: t('list.viewTable') },
-            ]}
-            value={viewMode}
-            onChange={setViewMode}
-          />
-          <button type="button" className={styles.reload} onClick={reload} disabled={status === 'loading'}>
-            {status === 'loading' ? t('list.loading') : t('list.reload')}
-          </button>
-        </div>
       </div>
 
       {status === 'error' && <p className={styles.error}>{error}</p>}
@@ -127,12 +96,47 @@ export default function PokemonListPage() {
             filters={filters}
             onSetFilter={setFilter}
             onReset={resetFilters}
-            filtering={filtering}
+            filtering={filtering || pokedexFilterActive}
             resultCount={visible.length}
             sortKey={sortKey}
             onSetSortKey={setSortKey}
             sortDirection={sortDirection}
             onToggleSortDirection={toggleSortDirection}
+            headerControls={
+              <>
+                <PokedexScopeSelector
+                  pokedexScope={pokedexScope}
+                  onSetScope={setPokedexScope}
+                  pokedexMode={pokedexMode}
+                  onSetMode={setPokedexMode}
+                  pokedexRegion={pokedexRegion}
+                  onSetRegion={setPokedexRegion}
+                  pokedexName={pokedexName}
+                  onSetPokedexName={setPokedexName}
+                  pokedexOptionsForRegion={pokedexOptionsForRegion}
+                  versionName={versionName}
+                  onSetVersionName={setVersionName}
+                  hasSiblingVersions={hasSiblingVersions}
+                  exclusiveOnly={exclusiveOnly}
+                  onSetExclusiveOnly={setExclusiveOnly}
+                  catalog={pokedexCatalog}
+                  language={language}
+                />
+                <div className={styles.headerControlsRight}>
+                  <ViewModeToggle
+                    modes={[
+                      { value: 'grid', label: t('list.viewGrid') },
+                      { value: 'table', label: t('list.viewTable') },
+                    ]}
+                    value={viewMode}
+                    onChange={setViewMode}
+                  />
+                  <button type="button" className={styles.reload} onClick={reload} disabled={status === 'loading'}>
+                    {status === 'loading' ? t('list.loading') : t('list.reload')}
+                  </button>
+                </div>
+              </>
+            }
           />
 
           {exclusiveOnly && pendingEncounterIds.length > 0 && encountersCache.status !== 'running' && (
@@ -166,34 +170,36 @@ export default function PokemonListPage() {
             />
           )}
 
-          {visible.length === 0 ? (
-            <p className={styles.empty}>{t('list.emptyFiltered')}</p>
-          ) : viewMode === 'table' ? (
-            <PokemonTable
-              entries={visible}
-              names={names}
-              language={language}
-              sortKey={sortKey}
-              sortDirection={sortDirection}
-              onSetSortKey={setSortKey}
-              onToggleSortDirection={toggleSortDirection}
-            />
-          ) : (
-            <ul className={styles.grid}>
-              {visible.map((entry) => (
-                <li key={entry.id}>
-                  <PokemonCard
-                    id={entry.id}
-                    name={entry.name}
-                    displayName={names[entry.id]?.names[language] ?? capitalize(entry.name.replace(/-/g, ' '))}
-                    sprite={officialArtworkUrl(entry.id)}
-                    types={entry.types}
-                    number={entry.displayNumber}
-                  />
-                </li>
-              ))}
-            </ul>
-          )}
+          <div className={styles.results}>
+            {visible.length === 0 ? (
+              <p className={styles.empty}>{t('list.emptyFiltered')}</p>
+            ) : viewMode === 'table' ? (
+              <PokemonTable
+                entries={visible}
+                names={names}
+                language={language}
+                sortKey={sortKey}
+                sortDirection={sortDirection}
+                onSetSortKey={setSortKey}
+                onToggleSortDirection={toggleSortDirection}
+              />
+            ) : (
+              <ul className={styles.grid}>
+                {visible.map((entry) => (
+                  <li key={entry.id}>
+                    <PokemonCard
+                      id={entry.id}
+                      name={entry.name}
+                      displayName={names[entry.id]?.names[language] ?? capitalize(entry.name.replace(/-/g, ' '))}
+                      sprite={officialArtworkUrl(entry.id)}
+                      types={entry.types}
+                      number={entry.displayNumber}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </>
       )}
     </section>

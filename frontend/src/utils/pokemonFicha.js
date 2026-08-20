@@ -215,16 +215,24 @@ export function moveLearnMethod(pokemonMoves, moveName) {
 // interfaz con interpolación (nivel, ítem...), no un catálogo estático, así que va por
 // locales/*.json y no inline como FICHA_SECTIONS/DAMAGE_CLASS_ES.
 //
+// `itemNames`/`language` localizan el nombre del objeto interpolado, mismo mapa que
+// usePokemonNames pero para objetos (ver useItemNames) — el objeto crudo de PokeAPI
+// solo trae `{name, url}`, sin `names`, así que hay que cruzarlo por id igual que se
+// hace con las especies de la propia cadena evolutiva.
+//
 // Devuelve `{ text, item }` en vez de solo el texto — `item` es el `{name, url}` crudo
 // de PokeAPI cuando la evolución depende de un objeto (piedra, objeto que se lleva
 // puesto...), para que el JSX pueda pintar su icono/enlace además de la frase (ver
 // itemIconUrl en itemSprite.js). `null` si el método no involucra ningún objeto.
-function evolutionMethodLabel(details, t) {
+function evolutionMethodLabel(details, t, itemNames, language) {
   const d = details?.[0]
   if (!d) return null
   if (d.min_level) return { text: t('ficha.evoMethod.level', { level: d.min_level }), item: null }
   if (d.item) {
-    return { text: t('ficha.evoMethod.useItem', { item: d.item.name.replace(/-/g, ' ') }), item: d.item }
+    const itemId = idFromUrl(d.item.url)
+    const localized = itemNames?.[itemId]?.[language]
+    const itemLabel = localized ?? d.item.name.replace(/-/g, ' ')
+    return { text: t('ficha.evoMethod.useItem', { item: itemLabel }), item: d.item }
   }
   if (d.min_happiness) return { text: t('ficha.evoMethod.happiness', { value: d.min_happiness }), item: null }
   if (d.trigger?.name === 'trade') return { text: t('ficha.evoMethod.trade'), item: null }
@@ -235,13 +243,13 @@ function evolutionMethodLabel(details, t) {
 // ordenada de etapas con el método de la transición ANTERIOR a cada una (ver
 // evolutionMethodLabel) — ignora ramas alternativas (ej. Eevee), suficiente para una
 // vista lineal simple.
-export function evolutionStages(evolutionChain, t) {
+export function evolutionStages(evolutionChain, t, itemNames, language) {
   const stages = []
   let node = evolutionChain?.chain
   let method = null
   while (node) {
     stages.push({ id: idFromUrl(node.species.url), name: node.species.name, method })
-    method = evolutionMethodLabel(node.evolves_to?.[0]?.evolution_details, t)
+    method = evolutionMethodLabel(node.evolves_to?.[0]?.evolution_details, t, itemNames, language)
     node = node.evolves_to?.[0]
   }
   return stages

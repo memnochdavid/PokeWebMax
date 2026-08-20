@@ -8,6 +8,21 @@
   border-radius: 0.6rem;
 }
 
+/* Fila de controles de la página (selector de Pokédex + modo de vista/recargar) que
+   antes vivía en el header de PokemonListPage, ahora dentro del panel — pedido
+   explícito de David, para que quede junto al resto de controles que acotan qué se ve
+   en la lista, en vez de separado arriba del todo. Separador propio (no solo el `gap`
+   del panel) para distinguirla visualmente del resto de filas, que sí son filtros. */
+.controlsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--line);
+}
+
 .searchRow {
   display: flex;
   flex-wrap: wrap;

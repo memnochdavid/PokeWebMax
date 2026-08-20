@@ -1,9 +1,19 @@
+/* Alto real vía flexbox (`.main`/`.app` en App.module.css, ver comentario ahí), no un
+   número adivinado — un intento anterior fijaba `min/max-height: calc(100vh - 4.1rem)`
+   asumiendo el alto del nav siempre igual, pero en cuanto el nav pasaba a ocupar dos
+   líneas (ventana más estrecha, zoom...) esa cifra se quedaba corta y volvía el scroll
+   externo. `min-height: 0` es lo que de verdad hace falta aquí: por defecto un hijo
+   flex no encoge por debajo del alto de su contenido aunque el padre (`.main`,
+   stretch) ya le esté dando un alto exacto — con esto acepta ese alto exacto y dentro
+   reparte el sobrante/déficit a `.results` (`flex:1;min-height:0` más abajo), que es
+   quien de verdad tiene contenido de longitud variable. */
 .page {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
   padding: 2rem;
   width: 100%;
+  min-height: 0;
 }
 
 .header {
@@ -19,7 +29,10 @@
   margin-top: 0.2rem;
 }
 
-.headerControls {
+/* Grupo derecho de `headerControls` (ver PokemonFilters, que ahora aloja toda la fila —
+   PokedexScopeSelector + esto) — modo de vista y recargar, aparte del selector de
+   Pokédex que ocupa la izquierda de esa fila. */
+.headerControlsRight {
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -103,6 +116,30 @@
   margin: 0;
 }
 
+/* Scroll interno — el header/filtros/paginador de generación se quedan fijos y solo el
+   listado de resultados hace scroll dentro de su propia caja, en vez de la página
+   entera. `flex: 1` + `min-height: 0` (no un `max-height` en vh adivinado, ver
+   comentario de `.page`) para que ocupe exactamente el espacio que le sobra a `.page`
+   una vez puesto el resto del contenido, sea cual sea su alto real.
+   `overflow-x: auto` (no `hidden`) para que, en modo tabla, sea `.results` quien
+   absorba el scroll horizontal de PokemonTable en vez de su propio `.wrap` — necesario
+   para que el thead sticky de la tabla funcione (ver comentario en
+   PokemonTable.module.css). En modo tarjetas no tiene efecto (el grid nunca es más
+   ancho que `.results`). */
+.results {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+@media (max-width: 900px) {
+  .results {
+    flex: none;
+    min-height: auto;
+    overflow: visible;
+  }
+}
+
 @media (max-width: 600px) {
   .page {
     padding: 1.25rem;
@@ -113,7 +150,7 @@
     align-items: stretch;
   }
 
-  .headerControls {
+  .headerControlsRight {
     flex-direction: column;
     align-items: stretch;
   }

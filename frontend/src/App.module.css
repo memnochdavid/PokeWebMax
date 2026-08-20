@@ -1,5 +1,15 @@
+/* `height` fijo (no `min-height`) para que `.main` (flex:1, debajo) pueda calcular su
+   alto real disponible = 100vh menos lo que el nav ocupe DE VERDAD, sea cual sea (el
+   nav puede pasar a dos líneas en ventanas estrechas) — así páginas como
+   PokemonListPage pueden apoyarse en ese alto real vía flexbox (`min-height:0` en
+   cascada) para su scroll interno, en vez de adivinar el alto del nav en rem (ver
+   comentario de `.page` en PokemonListPage.module.css, esa fue justo la adivinanza que
+   fallaba). Con `overflow` en su valor por defecto (visible) esto no cambia nada para
+   páginas que NO tienen su propio scroll interno: su contenido, si no cabe, sigue
+   desbordando hacia el scroll normal del documento exactamente igual que con
+   `min-height`. */
 .app {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
 }
@@ -95,24 +105,30 @@
 
 .langButton {
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   border-radius: 0.35rem;
   background: transparent;
-  color: var(--nav-text-muted);
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.04em;
-  padding: 0.3rem 0.55rem;
-  transition: color 0.15s ease, background 0.15s ease;
+  padding: 0.3rem 0.4rem;
+  opacity: 0.55;
+  transition: opacity 0.15s ease, background 0.15s ease;
 }
 
 .langButton:hover {
-  color: var(--nav-text);
+  opacity: 0.85;
 }
 
 .langActive {
   background: var(--signal);
-  color: var(--signal-contrast);
+  opacity: 1;
+}
+
+.langFlag {
+  display: block;
+  border-radius: 0.15rem;
+  object-fit: cover;
 }
 
 .themeToggle {
@@ -137,5 +153,6 @@
 
 .main {
   flex: 1;
+  min-height: 0;
   display: flex;
 }

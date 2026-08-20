@@ -22,12 +22,15 @@ export default function PokemonFilters({
   onSetSortKey,
   sortDirection,
   onToggleSortDirection,
+  headerControls,
 }) {
   const { language } = useLanguage()
   const { t } = useTranslation()
 
   return (
     <div className={styles.panel}>
+      {headerControls && <div className={styles.controlsRow}>{headerControls}</div>}
+
       <div className={styles.searchRow}>
         <input
           type="search"

@@ -50,6 +50,26 @@ class ItemListService
     }
 
     /**
+     * Nombres localizados por id, sin el resto del listado — mismo criterio que
+     * PokemonListService::namesById(): para sitios que solo tienen el id/slug a mano
+     * (ej. el objeto de una evolución en la ficha de Pokémon) y no necesitan cargar el
+     * listado completo de ~2200 objetos solo para traducir uno.
+     *
+     * @return array<int, array<string, string>>
+     */
+    public function namesById(): array
+    {
+        return $this->cache->get(
+            'item_names_by_id',
+            function (ItemInterface $item) {
+                $item->expiresAfter(self::LIST_CACHE_TTL_SECONDS);
+
+                return $this->repository->findLocalizedNamesByType('item', self::SUPPORTED_LANGUAGES);
+            },
+        );
+    }
+
+    /**
      * @return array<int, array{
      *     id: int, name: string, cached: bool, fetchedAt: ?string,
      *     names: array<string, string>, category: ?string, pocket: ?string, cost: ?int,

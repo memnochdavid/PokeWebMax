@@ -16,7 +16,7 @@ export default function PokemonCard({ id, name, displayName, sprite, types = [],
   const background = { background: `linear-gradient(90deg, ${color1} 0%, ${color2} 100%)` }
 
   return (
-    <Link to={`/ficha/${id}`} className={styles.card} style={background}>
+    <Link to={`/ficha/${name ?? id}`} className={styles.card} style={background}>
       <span className={styles.number}>{formatPokedexNumber(number ?? id)}</span>
       <div className={`${styles.spriteWrap} hud-frame hud-frame--hover`} style={{ color: color1 }}>
         <img

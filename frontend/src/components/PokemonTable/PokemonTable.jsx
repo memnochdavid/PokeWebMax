@@ -56,7 +56,7 @@ export default function PokemonTable({ entries, names, language, sortKey, sortDi
           {entries.map((entry) => {
             const displayName = names[entry.id]?.names[language] ?? capitalize(entry.name.replace(/-/g, ' '))
             return (
-              <tr key={entry.id} className={styles.row} onClick={() => navigate(`/ficha/${entry.id}`)}>
+              <tr key={entry.id} className={styles.row} onClick={() => navigate(`/ficha/${entry.name ?? entry.id}`)}>
                 <td className={styles.spriteCell}>
                   <Sprite id={entry.id} />
                 </td>

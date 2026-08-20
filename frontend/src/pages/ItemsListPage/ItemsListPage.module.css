@@ -1,9 +1,14 @@
+/* `min-height: 0` para aceptar el alto real que da `.main`/`.app` (App.module.css) vía
+   flexbox en vez de forzar su propio alto de contenido — mismo criterio y mismo motivo
+   que PokemonListPage.module.css (ver comentario de `.page` ahí): nada de adivinar el
+   alto del nav o de header/filtros en rem, eso es justo lo que causaba scroll doble. */
 .page {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
   padding: 2rem;
   width: 100%;
+  min-height: 0;
 }
 
 .header {
@@ -17,6 +22,13 @@
 .title {
   font-size: 2rem;
   margin-top: 0.2rem;
+}
+
+.headerControls {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
 }
 
 .reload {
@@ -87,6 +99,25 @@
   list-style: none;
   padding: 0;
   margin: 0;
+}
+
+/* Scroll interno — header/filtros se quedan fijos y solo el listado hace scroll dentro
+   de su propia caja. Mismo criterio que `.results` en PokemonListPage.module.css —
+   `overflow-x: auto` (no `hidden`) para que en modo tabla sea `.results` quien absorba
+   el scroll horizontal de ItemTable, necesario para que su thead sticky funcione (ver
+   comentario en ItemTable.module.css). */
+.results {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+@media (max-width: 900px) {
+  .results {
+    flex: none;
+    min-height: auto;
+    overflow: visible;
+  }
 }
 
 @media (max-width: 600px) {

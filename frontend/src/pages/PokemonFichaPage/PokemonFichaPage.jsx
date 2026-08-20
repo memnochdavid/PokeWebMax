@@ -7,6 +7,7 @@ import useImageFallback from '../../hooks/useImageFallback.js'
 import useAnimatedSpriteVariants from '../../hooks/useAnimatedSpriteVariants.js'
 import useSelectedVersion from '../../hooks/useSelectedVersion.js'
 import usePokemonNames from '../../hooks/usePokemonNames.js'
+import useItemNames from '../../hooks/useItemNames.js'
 import { useLanguage } from '../../contexts/LanguageContext.jsx'
 import TypeBadge from '../../components/TypeBadge/TypeBadge.jsx'
 import PokemonHeroSprite from '../../components/PokemonHeroSprite/PokemonHeroSprite.jsx'
@@ -184,6 +185,7 @@ export default function PokemonFichaPage() {
   const { language } = useLanguage()
   const { t } = useTranslation()
   const pokemonNames = usePokemonNames()
+  const itemNames = useItemNames()
   const [expandedMoves, setExpandedMoves] = useState(() => new Set())
   const [moveSortKey, setMoveSortKey] = useState('level')
   const [moveSortDirection, setMoveSortDirection] = useState('asc')
@@ -217,6 +219,23 @@ export default function PokemonFichaPage() {
     setOpenSection(key)
     scrollSectionIntoView(sectionRefs, key)
   }
+  // La cabecera sticky de la tabla de movimientos (`.moveTable th`, CSS) solo puede
+  // pegarse a `.content` (la única caja que hace scroll interno) si nada intermedio
+  // tiene su propio overflow no-visible — pero `.collapseInner` SÍ necesita
+  // overflow:hidden mientras la sección anima (ver comentario de `.collapseWrap`), o
+  // el contenido se vería desbordar durante los 250ms de apertura/cierre. Se retira
+  // ese overflow:hidden (clase `.collapseInnerSticky`, ver CSS) solo una vez terminada
+  // la animación de apertura y solo mientras MOVES sea la sección abierta — mismo
+  // tiempo que COLLAPSE_TRANSITION_MS/scrollSectionIntoView.
+  const [movesSettled, setMovesSettled] = useState(false)
+  useEffect(() => {
+    if (openSection !== 'MOVES') {
+      setMovesSettled(false)
+      return
+    }
+    const id = setTimeout(() => setMovesSettled(true), COLLAPSE_TRANSITION_MS + 20)
+    return () => clearTimeout(id)
+  }, [openSection])
   const toggleMove = (id) =>
     setExpandedMoves((prev) => {
       const next = new Set(prev)
@@ -309,7 +328,7 @@ export default function PokemonFichaPage() {
 
   // Hoisted fuera del JSX de la sección EVOS para poder reusarlo también como subtítulo
   // de la cabecera colapsada (ver sectionPreviews) sin recalcularlo dos veces.
-  const evoStagesList = evolutionChain ? evolutionStages(evolutionChain, t) : []
+  const evoStagesList = evolutionChain ? evolutionStages(evolutionChain, t, itemNames, language) : []
   const statsTotal = pokemon.stats.reduce((sum, s) => sum + s.base_stat, 0)
   // Subtítulo de una línea bajo cada título de sección, visible tanto colapsada como
   // abierta — mitiga que la ficha se vea "vacía" con todo colapsado por defecto (ver
@@ -589,7 +608,7 @@ export default function PokemonFichaPage() {
                       </div>
                     )}
                     <Link
-                      to={`/ficha/${stage.id}`}
+                      to={`/ficha/${stage.name ?? stage.id}`}
                       className={styles.evoCard}
                       style={{ background: `linear-gradient(90deg, ${evoColor1} 0%, ${evoColor2} 100%)` }}
                     >
@@ -701,8 +720,7 @@ export default function PokemonFichaPage() {
         >
           <SectionHeading label={sectionLabel.MOVES[language]} sectionKey="MOVES" openSection={openSection} onToggle={toggleCollapse} color={primaryColor} icon={SECTION_ICONS.MOVES} preview={sectionPreviews.MOVES} />
           <div className={collapseWrapClassName(styles, 'MOVES', openSection)}>
-          <div className={styles.collapseInner}>
-          <div className={styles.moveTableWrap}>
+          <div className={`${styles.collapseInner} ${movesSettled ? styles.collapseInnerSticky : ''}`}>
           <table className={styles.moveTable}>
             <thead>
               <tr>
@@ -803,7 +821,6 @@ export default function PokemonFichaPage() {
                 })}
             </tbody>
           </table>
-          </div>
           </div>
           </div>
         </section>
@@ -913,7 +930,7 @@ export default function PokemonFichaPage() {
               return (
                 <li key={f.id} className={styles.formCard} style={style}>
                   {f.cached && f.id !== pokemon.id ? (
-                    <Link to={`/ficha/${f.id}`} className={styles.formCardInner}>
+                    <Link to={`/ficha/${f.name ?? f.id}`} className={styles.formCardInner}>
                       {cardContent}
                     </Link>
                   ) : (

@@ -10,8 +10,8 @@ import i18next from '../i18n.js'
 // ese idioma debe llegar también a /api/pokemon/names (lista + nombres de la cadena
 // evolutiva en la ficha).
 export const LANGUAGES = [
-  { code: 'es', label: 'ES' },
-  { code: 'en', label: 'EN' },
+  { code: 'es', label: 'ES', flag: '/flag/flag-spain.svg' },
+  { code: 'en', label: 'EN', flag: '/flag/flag-uk.svg' },
 ]
 
 const STORAGE_KEY = 'pokewebmax:language'

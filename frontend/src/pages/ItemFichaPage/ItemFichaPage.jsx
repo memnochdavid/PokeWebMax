@@ -141,7 +141,7 @@ export default function ItemFichaPage() {
               {item.held_by_pokemon.map((h) => {
                 const id = idFromUrl(h.pokemon.url)
                 return (
-                  <Link key={h.pokemon.name} to={`/ficha/${id}`} className={styles.heldChip}>
+                  <Link key={h.pokemon.name} to={`/ficha/${h.pokemon.name ?? id}`} className={styles.heldChip}>
                     {pokemonNames[id]?.names?.[language] ?? capitalize(h.pokemon.name.replace(/-/g, ' '))}
                   </Link>
                 )

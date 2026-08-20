@@ -73,7 +73,11 @@
     "noHeldBy": "No wild Pokémon naturally holds this.",
     "appearsIn": "Generations it appears in",
     "notCached": "This item isn't cached yet. Cache it first from /cache.",
-    "backToList": "Back to Items"
+    "backToList": "Back to Items",
+    "colName": "Name",
+    "colCategory": "Category",
+    "colPocket": "Pocket",
+    "colMove": "Move"
   },
   "filters": {
     "searchPlaceholder": "Search by name…",

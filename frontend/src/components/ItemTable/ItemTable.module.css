@@ -1,0 +1,76 @@
+/* Sin overflow propio en desktop — mismo motivo que .wrap en PokemonTable.module.css:
+   overflow-x:auto aquí rompería el thead sticky de abajo, que necesita que .results
+   (ItemsListPage.module.css) sea el único ancestro con overflow no-visible. En móvil
+   .results deja de tener scroll interno, así que ahí sí hace falta local. */
+.wrap {
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--chassis-900);
+}
+
+@media (max-width: 900px) {
+  .wrap {
+    overflow-x: auto;
+  }
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--chassis-800);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+  padding: 0.65rem 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.7rem;
+}
+
+.spriteHeader {
+  width: 3rem;
+}
+
+.row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.row:not(:last-child) {
+  border-bottom: 1px solid var(--line);
+}
+
+.row:hover {
+  background: var(--chassis-800);
+}
+
+.row td {
+  padding: 0.4rem 0.8rem;
+  vertical-align: middle;
+}
+
+.spriteCell {
+  padding: 0.25rem 0.5rem;
+}
+
+.sprite {
+  display: block;
+  width: 2rem;
+  height: 2rem;
+  object-fit: contain;
+}
+
+.name {
+  color: var(--text-h);
+  font-weight: 500;
+  white-space: nowrap;
+}

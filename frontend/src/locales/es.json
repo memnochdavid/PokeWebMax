@@ -73,7 +73,11 @@
     "noHeldBy": "Ningún Pokémon salvaje lo lleva de forma natural.",
     "appearsIn": "Generaciones en las que aparece",
     "notCached": "Este objeto no está cacheado todavía. Cachéalo primero desde /cache.",
-    "backToList": "Volver a Objetos"
+    "backToList": "Volver a Objetos",
+    "colName": "Nombre",
+    "colCategory": "Categoría",
+    "colPocket": "Bolsillo",
+    "colMove": "Movimiento"
   },
   "filters": {
     "searchPlaceholder": "Buscar por nombre…",

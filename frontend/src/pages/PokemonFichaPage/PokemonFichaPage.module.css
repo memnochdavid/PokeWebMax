@@ -440,17 +440,24 @@
   border: 1px solid var(--line);
   border-radius: 1rem;
   box-shadow: 0 24px 48px -32px rgba(0, 0, 0, 0.45);
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: auto;
 }
 
 /* En móvil solo se ve una sección a la vez (.sectionInactiveMobile) — un scroll
    anidado ahí se siente peor que el scroll de página normal en un móvil, así que se
-   desactiva el tope y se vuelve al comportamiento de toda la vida. */
+   desactiva el tope y se vuelve al comportamiento de toda la vida. Como `.content` deja
+   de ser el ancestro con overflow (y con él, el sticky de `.moveTable th` no aplica en
+   móvil — tampoco hace falta, no hay scroll interno que perseguir), el scroll
+   horizontal de la tabla de movimientos en pantallas estrechas se lo queda la propia
+   tabla en vez de `.content`. */
 @media (max-width: 900px) {
   .content {
     max-height: none;
     overflow: visible;
+  }
+
+  .moveTable {
+    overflow-x: auto;
   }
 }
 
@@ -574,6 +581,17 @@
   overflow: hidden;
   min-height: 0;
   padding-top: 1.1rem;
+}
+
+/* Contrapartida de `.collapseInner` solo para MOVES una vez asentada la animación
+   (ver `movesSettled` en PokemonFichaPage.jsx) — el thead sticky de `.moveTable`
+   necesita que NINGÚN ancestro entre él y `.content` tenga overflow no-visible, y
+   `.collapseInner` normalmente sí lo tiene (imprescindible mientras anima, ver arriba).
+   En reposo (sección ya abierta del todo) no hace falta ese recorte — el `1fr` de
+   `.collapseWrap` ya mide exactamente el contenido, así que quitarlo no cambia nada
+   visualmente salvo permitir que el sticky funcione. */
+.collapseInnerSticky {
+  overflow: visible;
 }
 
 .versionPicker {
@@ -863,7 +881,7 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text);
-  opacity: 0.75;
+  /*opacity: 0.75;*/
   padding: 0 1.1rem;
   position: relative;
   white-space: nowrap;
@@ -1023,13 +1041,17 @@
    filas de altura uniforme por naturaleza, ordenables por columna. */
 /* Alto fijo con scroll interno — antes una tabla de 80+ movimientos obligaba a hacer
    scroll larguísimo por toda la página para llegar a las secciones de debajo. */
-/* Antes tenía su propio scroll vertical acotado a 30rem — con .content ya scrollando
-   internamente (ver arriba) eso daba dos scrollbars anidadas al abrir Movimientos.
-   Solo se deja el scroll horizontal (la tabla no envuelve columnas en pantallas
-   estrechas), el vertical lo absorbe .content. */
-.moveTableWrap {
-  overflow-x: auto;
-}
+/* El div `.moveTableWrap` que envolvía la tabla se ha quitado del JSX — tenía
+   `overflow-x: auto` para el scroll horizontal en pantallas estrechas (la tabla no
+   envuelve columnas), pero eso lo convertía en el ancestro "scrollable" más cercano
+   para el `position: sticky` de la cabecera (ver `.moveTable th`) en vez de `.content`,
+   y como él mismo nunca scrollea (mide justo su contenido), el sticky no tenía ningún
+   efecto visible. Ahora el scroll horizontal, igual que el vertical, lo absorbe
+   `.content` directamente (ver `overflow: auto` ahí abajo) — un solo ancestro con
+   overflow no-visible en toda la cadena, que es justo lo que necesita
+   `position: sticky` para funcionar de verdad. En móvil (`.content` sin scroll propio,
+   ver su media query) el scroll horizontal de pantallas estrechas lo recupera
+   `.moveTable` directamente, ver su media query un poco más abajo. */
 
 .moveTable {
   width: 100%;

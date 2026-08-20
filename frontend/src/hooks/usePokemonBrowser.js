@@ -282,7 +282,16 @@ export default function usePokemonBrowser(pokemonList, { names = {}, language = 
   ])
 
   const setFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }))
-  const resetFilters = () => setFilters(EMPTY_FILTERS)
+  // LIMPIAR (ver PokemonFilters) resetea también el ámbito de Pokédex a Nacional —
+  // pedido explícito de David: con el selector de Pokédex ahora dentro del mismo panel
+  // de filtros (ver headerControls en PokemonListPage.jsx), un "limpiar" que solo
+  // tocara texto/tipo/toggles y dejara Regional puesto se sentía incompleto.
+  // setPokedexScope('national') ya resetea en cascada modo/región/juego/exclusivo (ver
+  // su propia definición más arriba).
+  const resetFilters = () => {
+    setFilters(EMPTY_FILTERS)
+    setPokedexScope('national')
+  }
   const toggleSortDirection = () => setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
 
   return {

@@ -1,8 +1,22 @@
+/* Sin overflow propio en desktop (a partir de 900px) — `overflow-x: auto` aquí
+   convertiría a `.wrap` en el ancestro "scrollable" más cercano para el
+   `position: sticky` de la cabecera (ver `.table thead th` más abajo) en vez de
+   `.results` (PokemonListPage.module.css), que es quien de verdad hace scroll
+   verticalmente; `.wrap` nunca scrollea por sí mismo (mide justo su contenido), así que
+   el sticky no tendría ningún efecto visible. El scroll horizontal en desktop lo
+   absorbe `.results` directamente. En móvil `.results` deja de tener scroll interno
+   (ver su media query) y nada más pide el sticky, así que ahí sí hace falta el
+   `overflow-x: auto` local (ver media query abajo) para no perder columnas. */
 .wrap {
-  overflow-x: auto;
   border: 1px solid var(--line);
   border-radius: 0.6rem;
   background: var(--chassis-900);
+}
+
+@media (max-width: 900px) {
+  .wrap {
+    overflow-x: auto;
+  }
 }
 
 .table {
@@ -16,6 +30,7 @@
 .table thead th {
   position: sticky;
   top: 0;
+  z-index: 1;
   background: var(--chassis-800);
   border-bottom: 1px solid var(--line);
   text-align: left;

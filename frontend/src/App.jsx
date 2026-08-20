@@ -35,14 +35,16 @@ function App() {
           </NavLink>
         </div>
         <div className={styles.langSwitch} role="group" aria-label={t('nav.dataLanguageAria')}>
-          {LANGUAGES.map(({ code, label }) => (
+          {LANGUAGES.map(({ code, label, flag }) => (
             <button
               key={code}
               type="button"
               className={`${styles.langButton} ${language === code ? styles.langActive : ''}`}
               onClick={() => setLanguage(code)}
+              aria-label={label}
+              title={label}
             >
-              {label}
+              <img src={flag} alt="" className={styles.langFlag} width={20} height={14} />
             </button>
           ))}
         </div>
