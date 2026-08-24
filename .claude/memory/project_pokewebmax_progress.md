@@ -2643,3 +2643,108 @@ devuelve `null` y sigue con el comportamiento de siempre. `php -l` sin errores e
 compila limpio. **No visto a ojo en el navegador** — mismo hueco de `claude-in-chrome`
 de siempre, pendiente de que David confirme visualmente el panel DESC de una mega
 (ej. `/ficha/charizard-mega-x`).
+
+## Scroll externo en la ficha a 1080p (funcionaba bien a 2K) — HECHO 2026-08-24
+
+David detectó que el frontend se desarrolló/probó a ojo en una pantalla 2K y ahí no
+había scroll externo (solo el interno de `.content`, pedido explícito desde la sesión
+del 18-08), pero en 1080p sí aparecía. Pidió examinar la situación, acotado a la vista
+de ficha (`PokemonFichaPage`).
+
+**Causa raíz encontrada sin necesidad de navegador** (análisis de CSS + comparación
+con un bug idéntico ya resuelto en `PokemonListPage`, ver abajo): `.content`
+calculaba su alto con `min/max-height: calc(100vh - 14rem)` — un presupuesto FIJO
+calibrado a ojo para cubrir todo el chrome de encima (`.cacheBar` + `.tabs` +
+`.globalVersionPicker`). El problema: `.globalVersionPicker` (el selector único de
+juego, `flex-wrap: wrap`, con 30-46 chips según el Pokémon — ver sección "Selector de
+juego único en la ficha" del 23-08) se añadió **DESPUÉS** de calibrar ese `14rem`, y
+puede ocupar 1, 2 o 3 líneas según el ancho de ventana — variación que el número fijo
+nunca contempló. En una pantalla 2K con más alto de sobra, que el presupuesto se
+quedara corto por unos pocos rem pasaba desapercibido; en 1080p, con mucho menos
+margen, el excedente empujaba `.content` (y con él `.hero`, que se estira para
+igualarlo vía el grid de `.layout`) más allá del viewport → scroll externo.
+
+**Este mismo patrón de bug ya se había encontrado y arreglado antes en
+`PokemonListPage`** (ver comentario en `PokemonListPage.module.css`: "un intento
+anterior fijaba `calc(100vh - 4.1rem)`... esa cifra se quedaba corta... volvía el
+scroll externo") — ahí se sustituyó por una cadena de flexbox real apoyada en
+`App.module.css` (`.app{height:100vh}` + `.main{flex:1;min-height:0}`, ya existente
+para TODA la app) en vez de adivinar un número. **`PokemonFichaPage` nunca se migró a
+ese mismo patrón** cuando se introdujo el scroll interno de `.content` (sesión del
+18-08) — se quedó con el cálculo manual en vh, que es justo lo que ahora se ha
+corregido, replicando el patrón ya probado.
+
+**Fix** (`PokemonFichaPage.module.css`, cadena completa de flexbox sin ningún número
+adivinado):
+- `.page`: gana `min-height: 0` (ya era `display:flex;flex-direction:column`) — acepta
+  el alto real que le da `.main`/`.app` de `App.module.css` en vez de crecer a su
+  contenido.
+- `.layout` (grid hero|main): gana `flex: 1; min-height: 0` — con eso, la fila
+  implícita del grid (`auto`, sin `grid-template-rows` propio) se estira para llenar
+  ese alto por defecto (`align-content: normal` ≈ `stretch`), y de ahí `.hero`/`.main`
+  heredan un alto real vía el `align-items: stretch` que YA tenía. Reset a
+  `flex: none; min-height: auto` en el media query móvil existente (`max-width:900px`,
+  donde `.hero`/`.content` ya volvían a alto automático) — sin esto recortaría
+  contenido en vez de dejar crecer la página con scroll normal.
+- `.main`: gana `min-height: 0` (mismo motivo — por defecto un hijo flex no encoge
+  por debajo de su contenido aunque el grid ya le dé un alto exacto).
+- `.content`: **`min/max-height: calc(100vh - 14rem)` → `flex: 1; min-height: 0`**
+  (el cambio central) — coge automáticamente "lo que sobre" en `.main` tras
+  `.tabs`/`.globalVersionPicker`, sea cual sea su alto real, sin ningún número que
+  recalibrar si el selector de juego vuelve a cambiar de alto en el futuro. Media
+  query móvil actualizada a juego (`flex:none;min-height:auto`, antes solo
+  `max-height:none`) — mismo criterio de reset que `.layout`.
+- `.cacheBar`/`.globalVersionPicker`: `flex-shrink: 0` añadido (mismo criterio
+  explícito que ya tenía `.tabs`) — no es estrictamente necesario (min-height:auto por
+  defecto ya actúa de suelo), pero deja explícito que estas franjas de chrome nunca
+  deben encogerse para "hacer sitio", solo `.content` debe absorber el sobrante/déficit.
+
+**No se tocó** `.hero`/`.heroBands`/`.moveTable th` (el sticky de la cabecera de la
+tabla de movimientos, que depende de que `.content` sea el único ancestro con
+`overflow` no-visible) — nada de eso depende de CÓMO se calcula el alto de `.content`,
+solo de que siga siendo `overflow:auto` con un alto real, que sigue siendo cierto.
+
+**Verificado**: Vite compila sin errores (`docker compose logs frontend`, sin
+`PARSE_ERROR`), `/ficha/25` sirve 200, el módulo CSS transformado se pidió
+directamente a Vite sin error. El razonamiento de por qué esto arregla el bug es
+puramente estructural (misma cadena de flexbox ya probada y funcionando en
+`PokemonListPage` en producción) — **no se pudo verificar a ojo comparando 2K vs
+1080p** (mismo hueco de `claude-in-chrome` de toda la vida de este proyecto, se buscó
+explícitamente si estaba disponible en esta sesión y no lo estaba). David debería
+confirmar en su pantalla 1080p que ya no hay scroll externo, y de paso que en 2K
+sigue viéndose igual que antes (el cambio es solo AL MECANISMO de cálculo, no debería
+alterar el resultado visual en la resolución donde ya funcionaba).
+
+## Icono de tipo como marca de agua en el hero — HECHO 2026-08-24
+
+David compartió una captura de Dexter (Android, `/home/david/Escritorio/capturas/
+ficha.jpeg`, Bulbasaur) señalando que cada banda de color del hero lleva un icono de
+tipo en una esquina, semitransparente — y confirmó que es el MISMO icono que ya
+usamos en las cards (`TypeBadge`/`PokemonCard`), no un asset nuevo.
+
+**Truco visual que hizo esto trivial**: los SVG de `assets/types/{type}.svg` son un
+cuadrado de fondo del color exacto del tipo (`TYPE_COLORS`, mismos valores hex) +
+glifo blanco — como las bandas del hero (`.heroBands`) ya se pintan con
+`typeColor(types[0])`/`typeColor(types[1])` (mismo `TYPE_COLORS`), el cuadrado de
+fondo del icono queda invisible al superponerse a una banda del MISMO color exacto:
+solo se ve el glifo. Con `opacity: 0.4` sobre el `<img>` entero se consigue el efecto
+"marca de agua atenuada" de la captura sin tocar los SVG ni crear variantes.
+
+- `PokemonFichaPage.jsx`: dos `<img>` dentro de `.heroBands` (tras `.scanChamber`),
+  `typeIconUrl(types[0])` siempre, `typeIconUrl(types[1])` solo si el Pokémon es de
+  doble tipo (con un solo tipo ambas bandas comparten color, repetir el icono sería
+  redundante). `alt=""` + `aria-hidden`, puramente decorativo.
+- CSS: `.heroTypeIcon` (`position:absolute; right:0.75rem; 2.5rem×2.5rem; opacity:0.4;
+  pointer-events:none`) + `.heroTypeIconPrimary`/`Secondary` para el `top`/`bottom`.
+  Posición en rem fijos (no % del alto de `.heroBands`, que varía con el viewport) —
+  `top: 3.5rem` dejando hueco de sobra a `.genderToggle` (1.9rem de alto, empieza en
+  `top:0.75rem`, ver arriba en el mismo archivo), `bottom: 0.75rem` sin competir con
+  `.decorationSelect` (centrado, no a la derecha).
+
+**Verificado**: `oxlint` 0 errores/warnings, Vite sirve el módulo sin `PARSE_ERROR`.
+**No visto a ojo en el navegador** — mismo hueco de `claude-in-chrome` de siempre;
+David debería confirmar que el cuadrado de fondo del SVG realmente queda invisible
+sobre la banda (dependía de que ambos colores coincidieran EXACTO, verificado por
+código — `TYPE_COLORS` en JS y el `fill` de cada SVG vienen de la misma fuente
+portada de DexterWeb — pero no comprobado píxel a píxel a ojo) y que la posición no
+choca con el selector de género en Pokémon con esa opción (ej. `/ficha/25` Pikachu).

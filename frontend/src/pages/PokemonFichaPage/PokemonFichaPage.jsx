@@ -12,7 +12,7 @@ import { useLanguage } from '../../contexts/LanguageContext.jsx'
 import TypeBadge from '../../components/TypeBadge/TypeBadge.jsx'
 import PokemonHeroSprite from '../../components/PokemonHeroSprite/PokemonHeroSprite.jsx'
 import StatRadarChart, { MAX_STAT, STAT_LABELS, STAT_ORDER } from '../../components/StatRadarChart/StatRadarChart.jsx'
-import { typeColor } from '../../utils/pokemonTypes.js'
+import { typeColor, typeIconUrl } from '../../utils/pokemonTypes.js'
 import { spriteHomeUrl } from '../../utils/spritesHome.js'
 import {
   animatedSpriteUrl,
@@ -456,6 +456,17 @@ export default function PokemonFichaPage() {
               height={200}
             />
           </div>
+          {/* Icono de tipo como marca de agua en la esquina de cada banda — mismo SVG
+              que ya usa TypeBadge (fondo cuadrado del color exacto del tipo + glifo
+              blanco), imitando la ficha de Dexter (Android): al coincidir el color de
+              fondo del SVG con el de la propia banda, el cuadrado queda invisible y
+              solo se ve el glifo, atenuado por la opacidad reducida. Solo se pinta el
+              segundo (types[1]) si el Pokémon es de doble tipo — con un solo tipo
+              ambas bandas comparten color y repetir el icono sería redundante. */}
+          <img className={`${styles.heroTypeIcon} ${styles.heroTypeIconPrimary}`} src={typeIconUrl(types[0])} alt="" aria-hidden="true" />
+          {types[1] && (
+            <img className={`${styles.heroTypeIcon} ${styles.heroTypeIconSecondary}`} src={typeIconUrl(types[1])} alt="" aria-hidden="true" />
+          )}
           {!isGigantamax && hasFemale && (
             <div className={styles.genderToggle} role="group" aria-label={t('ficha.genderToggleAria')}>
               <button

@@ -2,21 +2,26 @@
    `max-width`) — antes esta página se topaba a 1900px mientras el resto de vistas
    usaba todo el ancho disponible, así que en pantallas más anchas la ficha se veía
    más estrecha que la lista de la que venía.
-   Deliberadamente SIN `height`/`overflow` propios — una versión anterior fijaba
-   `height: calc(100vh - 4.1rem)` para intentar que la página nunca hiciera scroll,
-   pero esa cifra dependía de adivinar el alto real del nav de la app al milímetro: en
-   cuanto se desviaba un poco, `.page` se pasaba del hueco real que le daba su
-   contenedor flex (`.main` de App.module.css, sin ningún `overflow` que lo frene) y
-   desbordaba el documento entero — scroll externo persistente que ningún reajuste del
-   número arreglaba de verdad, solo lo movía. El scroll interno de `.content` (ver más
-   abajo) no depende de que `.page` tenga un alto exacto — se basta con su propio
-   `max-height` en vh, así que no hace falta esa cota aquí. */
+   `min-height: 0` (sin `height` propio) para heredar el alto real vía flexbox de
+   `.main`/`.app` en App.module.css — MISMO patrón que PokemonListPage.module.css (ver
+   comentario ahí para el porqué completo). Una versión anterior de ESTA página no
+   tenía esto y en su lugar `.content` (más abajo) calculaba su alto a mano con
+   `calc(100vh - 14rem)`, una cifra calibrada a ojo en una pantalla 2K — bug real
+   encontrado 2026-08-24 al probar en 1080p: el `.globalVersionPicker` (selector de
+   juego, `flex-wrap: wrap`, se añadió DESPUÉS de calibrar ese número) puede ocupar 1,
+   2 o 3 líneas según el ancho de ventana, y esa variación nunca estaba contemplada en
+   los 14rem fijos — en 2K sobraba margen y no se notaba, en 1080p el excedente
+   empujaba `.content` (y con él `.hero`, que se estira para igualarlo) fuera del
+   viewport → scroll externo. Con flexbox real no hay número que recalibrar: `.content`
+   coge automáticamente "lo que sobre" después de `.cacheBar`/`.tabs`/
+   `.globalVersionPicker`, sea cual sea su alto real. */
 .page {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
   padding: 2rem 1.25rem;
   width: 100%;
+  min-height: 0;
 }
 
 .backLink {
@@ -48,25 +53,44 @@
    ningún alto a mano en ninguno de los dos — versiones anteriores lo intentaron con
    `grid-template-rows: 1fr` + alturas explícitas calculadas a partir de `.page`, pero
    eso dependía de que `.page` tuviera un alto exacto, que resultó ser la causa real
-   del scroll externo (ver comentario de `.page` más arriba). */
+   del scroll externo (ver comentario de `.page` más arriba).
+   `flex: 1; min-height: 0` — recibe el alto real de `.page` (flexbox, ver arriba) en
+   vez de crecer a su contenido; con eso, la fila implícita de este grid (auto, sin
+   `grid-template-rows` propio) se estira para llenarlo por defecto
+   (`align-content: normal` ≈ `stretch` en Grid), y de ahí `.hero`/`.main` heredan un
+   alto real y exacto sin que nadie tenga que calcularlo en vh. */
 .layout {
   display: grid;
   grid-template-columns: clamp(380px, 25vw, 560px) 1fr;
   gap: 1.75rem;
   align-items: stretch;
+  flex: 1;
+  min-height: 0;
 }
 
 @media (max-width: 900px) {
   .layout {
     grid-template-columns: 1fr;
+    /* .hero/.content vuelven a alto automático en móvil (ver sus propios media
+       queries) — sin esto, `flex:1;min-height:0` seguiría intentando encajar la
+       columna apilada dentro del alto restante de `.page` y recortaría contenido en
+       vez de dejar crecer la página con scroll normal. */
+    flex: none;
+    min-height: auto;
   }
 }
 
+/* `min-height: 0` — mismo motivo que `.page`/`.layout`: sin esto, un hijo flex por
+   defecto no acepta encoger por debajo del alto de SU contenido aunque el grid de
+   `.layout` (stretch) ya le esté dando un alto exacto, y el sobrante/déficit no
+   llegaría nunca a `.content` (más abajo), que es quien de verdad tiene que
+   absorberlo con su propio scroll interno. */
 .main {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
   min-width: 0;
+  min-height: 0;
 }
 
 .status {
@@ -148,6 +172,31 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
+}
+
+/* Marca de agua de tipo en la esquina de cada banda (ver JSX) — tamaño/posición fijos
+   en rem (no % del alto de .heroBands, que varía con el viewport) para que la
+   proporción se sienta igual de "insignia pequeña en la esquina" en cualquier alto de
+   hero. `top` del icono primario deja hueco a `.genderToggle` (1.9rem de alto,
+   top:0.75rem — ver abajo); `bottom` del secundario no compite con
+   `.decorationSelect`, que está centrado, no a la derecha. `pointer-events:none`
+   porque es puramente decorativo, nunca debe robarle el click a nada de debajo. */
+.heroTypeIcon {
+  position: absolute;
+  right: 0.75rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.heroTypeIconPrimary {
+  top: 3.5rem;
+}
+
+.heroTypeIconSecondary {
+  bottom: 0.75rem;
 }
 
 .genderToggle {
@@ -310,6 +359,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  flex-shrink: 0;
   padding: 0.75rem 1rem;
   border: 1px solid color-mix(in srgb, var(--signal) 40%, var(--line));
   background: color-mix(in srgb, var(--signal) 8%, var(--chassis-900));
@@ -430,18 +480,25 @@
    vez de un salto de 2.75rem de aire — se nota mucho más "instrumento" y menos
    "lista de texto suelta". */
 /* Scroll interno (pedido explícito de David) — antes esta caja crecía sin límite y
-   era la página entera la que hacía scroll. `max-height` propio en vez de `flex: 1`
-   sobre un `.main`/`.page` de alto exacto (lo que se probó antes, ver comentario de
-   `.page`): así el scroll interno de `.content` no depende de que TODA la cadena de
-   contenedores por encima tenga un alto milimétricamente correcto — si esta
-   estimación se queda corta o larga en algún viewport concreto, lo peor que pasa es
-   que la barra de scroll de `.content` aparece un poco antes o después de lo ideal,
-   nunca que la página entera se desborde. */
+   era la página entera la que hacía scroll.
+   `flex: 1; min-height: 0` (NO un `calc(100vh - Nrem)` a mano) — bug real encontrado
+   2026-08-24: la versión anterior de esta regla usaba `min/max-height: calc(100vh -
+   14rem)`, un presupuesto fijo calibrado a ojo en una pantalla 2K que tenía que
+   cubrir TODO el chrome de encima (`.cacheBar`+`.tabs`+`.globalVersionPicker`) —
+   `.globalVersionPicker` en particular (`flex-wrap: wrap`, con 30-45 chips de juego
+   según el Pokémon) puede ocupar 1-3 líneas y se añadió DESPUÉS de calibrar ese
+   número, así que su variación real nunca estaba contemplada. En 2K sobraba margen y
+   no se notaba; en 1080p el excedente empujaba `.content` (y `.hero`, que se estira
+   para igualarlo vía `.layout`) fuera del viewport → scroll externo, justo lo que se
+   quería evitar. Con `flex: 1; min-height: 0` dentro de `.main` (también flexbox
+   ahora, ver ahí) `.content` coge automáticamente "lo que sobre" tras el resto de la
+   columna, sea cual sea su alto real — cero número que recalibrar si el selector de
+   juego cambia de alto en el futuro. */
 .content {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 14rem);
-  max-height: calc(100vh - 14rem);
+  flex: 1;
+  min-height: 0;
   line-height: 1.6;
   background: var(--chassis-900);
   border: 1px solid var(--line);
@@ -459,7 +516,8 @@
    tabla en vez de `.content`. */
 @media (max-width: 900px) {
   .content {
-    max-height: none;
+    flex: none;
+    min-height: auto;
     overflow: visible;
   }
 
@@ -609,6 +667,7 @@
   align-items: center;
   gap: 0.6rem;
   flex-wrap: wrap;
+  flex-shrink: 0;
   padding: 0.6rem 0.4rem;
   margin-bottom: 0.6rem;
 }
