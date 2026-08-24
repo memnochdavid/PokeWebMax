@@ -5,7 +5,7 @@
    externo. `min-height: 0` es lo que de verdad hace falta aquí: por defecto un hijo
    flex no encoge por debajo del alto de su contenido aunque el padre (`.main`,
    stretch) ya le esté dando un alto exacto — con esto acepta ese alto exacto y dentro
-   reparte el sobrante/déficit a `.results` (`flex:1;min-height:0` más abajo), que es
+   reparte el sobrante/déficit a `.layout` (`flex:1;min-height:0` más abajo), que es
    quien de verdad tiene contenido de longitud variable. */
 .page {
   display: flex;
@@ -14,6 +14,64 @@
   padding: 2rem;
   width: 100%;
   min-height: 0;
+}
+
+/* Panel de filtros + resultados como 2 columnas (antes apiladas a todo el ancho) —
+   pedido explícito de David 2026-08-24. Mismo patrón de Grid ya probado en
+   PokemonFichaPage.module.css (ver ahí el porqué completo de cada pieza — dos bugs
+   reales encontrados esa vez, no repetidos aquí a propósito):
+   - `grid-template-rows: minmax(0, 1fr)` explícito — NO depender de que `align-
+     content: normal` se comporte como `stretch` para una fila `auto` (no se cumplía
+     en la práctica).
+   - `align-items: stretch` (valor por defecto, dejado explícito): las dos columnas
+     miden lo mismo — mismo criterio que hero/contenido en la ficha (pedido de David
+     tras ver una primera versión con `align-items:start`, donde el panel de filtros
+     quedaba corto y la tabla larga, columnas descompensadas). El panel de filtros
+     (`PokemonFilters`) no necesita `min-height:0` para esto — a diferencia de
+     `.resultsColumn`, su contenido siempre es más corto que el alto estirado, así que
+     simplemente ocupa ese alto de sobra como espacio en blanco dentro de su propia
+     tarjeta, sin necesitar encoger por debajo de su contenido. Como aquí solo hay 2
+     columnas (no 3 con `grid-column` fuera de orden como en la ficha), el
+     auto-placement por orden del DOM ya coloca ambas en la fila 1 sin necesitar
+     `grid-row` explícito. */
+.layout {
+  display: grid;
+  grid-template-columns: clamp(280px, 24vw, 360px) 1fr;
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 1.5rem;
+  flex: 1;
+  min-height: 0;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    flex: none;
+    min-height: auto;
+  }
+}
+
+/* Columna derecha: agrupa los avisos de encuentros (alto variable, condicionales) +
+   `.results` en una única columna flex, para que sea ESTA la que reciba el alto real
+   estirado por el grid (`align-self: stretch`) y reparta el sobrante a `.results`
+   (`flex:1;min-height:0` ahí abajo) — mismo motivo que `.main`/`.hero` en la ficha:
+   sin `min-height:0` aquí, un hijo de grid no acepta encoger por debajo de su
+   contenido aunque el grid ya le dé un alto exacto. */
+.resultsColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-self: stretch;
+  min-height: 0;
+}
+
+@media (max-width: 900px) {
+  .resultsColumn {
+    align-self: auto;
+    min-height: auto;
+  }
 }
 
 .header {

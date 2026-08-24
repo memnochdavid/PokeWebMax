@@ -26,7 +26,7 @@ class PokemonFichaCacheService
      */
     public function cacheMissing(string $idOrName): void
     {
-        $pokemon = $this->repository->findByTypeAndIdOrName('pokemon', $idOrName);
+        $pokemon = $this->repository->findPokemonWithSpeciesFallback($idOrName);
         if ($pokemon === null) {
             throw new PokemonNotCachedException($idOrName);
         }

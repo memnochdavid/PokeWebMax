@@ -2940,3 +2940,124 @@ ese mismo `.toggleRow` (también `flex-wrap`) en vez de forzar una fila nueva.
 grupo de Etapas del resto de toggles. `{generationPager}` envuelto en
 `<div className={styles.pagerGroup}>`, con la misma regla que `.evoGroup`
 (`border-left:1px solid var(--line)` + `padding-left`/`margin-left` a juego).
+
+## Panel de filtros + resultados como 2 columnas en la lista de Pokémon — HECHO 2026-08-24
+
+David pidió que el panel de filtros y el listado de resultados fueran columnas en vez
+de estar apilados a todo el ancho, para aprovechar mejor el espacio (el panel de
+filtros no necesita todo el ancho de la página). Mismo patrón de Grid ya probado y
+depurado en `PokemonFichaPage.module.css` (ver esa sección para el detalle de los dos
+bugs reales que costó encontrar la primera vez — no se repitieron aquí a propósito):
+
+- `PokemonListPage.jsx`: `<PokemonFilters>` + el bloque de avisos de encuentros +
+  `.results` pasan de ser hijos planos de `.page` a vivir dentro de un nuevo
+  `<div className={styles.layout}>` (2 columnas) — los avisos de encuentros y
+  `.results` se agrupan en `<div className={styles.resultsColumn}>` (columna derecha),
+  `PokemonFilters` queda como la otra columna directa.
+- `PokemonListPage.module.css`: `.layout` (`display:grid; grid-template-columns:
+  clamp(280px,24vw,360px) 1fr; grid-template-rows: minmax(0,1fr)` explícito —
+  aprendido de la ficha, no fiarse de `align-content:normal≈stretch`; `flex:1;
+  min-height:0` para heredar el alto real de `.page`). **Diferencia clave con la
+  ficha**: aquí `align-items: start` (no `stretch`) — el panel de filtros NO debe
+  estirarse a la altura de los resultados, se queda con su alto natural arriba;
+  `.resultsColumn` lleva su propio `align-self: stretch` para ser la única que sí se
+  estira y reparte el sobrante a `.results` (`flex:1;min-height:0;overflow:auto`, sin
+  tocar — sigue siendo el mismo elemento con scroll interno de siempre, ahora anidado
+  un nivel más adentro). Solo 2 columnas, sin `grid-column`/`grid-row` fuera de orden
+  como en la ficha, así que no hizo falta el `grid-row` explícito extra (el
+  auto-placement por orden del DOM ya basta).
+- Breakpoint `900px` (coherente con el resto de la app): `.layout` vuelve a
+  `grid-template-columns:1fr` + `flex:none;min-height:auto`, `.resultsColumn` a
+  `align-self:auto;min-height:auto` — apilado normal, mismo criterio que `.content`
+  en la ficha (un scroll anidado se siente peor que el de página en touch).
+
+**Verificado**: `oxlint` 0 errores/warnings, Vite sirve JSX y CSS módulo sin
+`PARSE_ERROR`. **No visto a ojo en el navegador** — mismo hueco de `claude-in-chrome`
+de siempre; pendiente de que David confirme el resultado visual y el ancho de la
+columna de filtros (`clamp(280px,24vw,360px)`, elegido por analogía con la ficha, no
+medido a ojo contra el contenido real del panel — puede necesitar ajuste si algo
+envuelve más de la cuenta, ej. los 2 `TypeSelect` + el buscador en `.searchRow`).
+
+**Corrección, misma sesión**: David compartió una captura — con `align-items: start`
+las dos columnas quedaban descompensadas (panel de filtros corto, tabla de resultados
+larga con scroll interno). Cambiado a `align-items: stretch` (el valor por defecto,
+dejado explícito): ambas columnas miden lo mismo, igual que hero/contenido en la
+ficha. El panel de filtros no necesitó `min-height:0` para esto — su contenido
+siempre es más corto que el alto estirado, así que simplemente deja espacio en blanco
+dentro de su propia tarjeta en vez de necesitar encoger. **No visto a ojo en el
+navegador todavía** — pendiente de confirmación con una captura nueva.
+
+### `PokedexScopeSelector`: ámbito + región en la misma línea — HECHO 2026-08-24
+
+Con la columna de filtros angosta, el caso "Regional con región de varias Pokédex"
+(3 selects: ámbito/región/edición) desbordaba el panel — David pidió NO resolverlo con
+overflow, sino aprovechando que los dos primeros selects (ámbito + región/juego) caben
+perfectamente en la misma línea si se les da la anchura justa, dejando el 3º (edición,
+caso raro — solo regiones con más de una Pokédex, ej. Kanto normal vs Let's Go) en su
+propia línea debajo — nunca coexisten los 3 a la vez con esta agrupación.
+
+`PokedexScopeSelector.jsx` reestructurado: los dos primeros selects (ámbito siempre +
+región O juego según el caso) van dentro de un `<div className={styles.rowPrimary}>`
+nuevo; el 3º select (edición) y el checkbox de "solo exclusivos" quedan como hermanos
+sueltos de `.rowPrimary` dentro de `.row`, cada uno en su propia línea. CSS:
+`.row` pasa de fila con wrap a columna (agrupa las líneas); `.rowPrimary` es la fila
+de verdad (`flex-wrap` de sobra por si ni encogidos caben), con `.select` dentro
+ganando `flex:1;min-width:6rem` (antes `min-width:9rem` fijo, que por sí solo ya
+impedía que 2 cupieran en una columna de 280-360px) para repartirse el ancho
+disponible. El media query de 600px (antes forzaba TODO `.select` a `width:100%`) se
+acotó a `.row > .select` (solo el select de edición, hijo directo de `.row`) para no
+romper el "misma línea" en viewports estrechos donde `.rowPrimary` ya se encarga sola
+de encoger/envolver si hiciera falta de verdad.
+
+**Verificado**: `oxlint` 0 errores/warnings, Vite sirve JSX/CSS módulo sin
+`PARSE_ERROR`. **No visto a ojo en el navegador** — mismo hueco de siempre, pendiente
+de que David confirme que ámbito+región ya caben en la misma línea sin desbordar el
+panel.
+
+## "Zygarde no está cacheado" siendo falso — bug de resolución nombre-especie vs. variante — HECHO 2026-08-24
+
+David reportó el mensaje "El Pokémon 'zygarde' no está cacheado todavía" y preguntó a
+qué podía deberse. Diagnosticado con SQL directo antes de tocar nada: la especie
+`zygarde` SÍ estaba cacheada, y también TODAS sus variantes (`zygarde-50`,
+`zygarde-10`, `zygarde-complete`, `zygarde-10/50-power-construct`, `zygarde-mega`) —
+el dato estaba completo, el problema era de resolución de nombre.
+
+**Causa raíz**: la lista de Pokémon (`PokemonListService::computeListAll()`) usa
+`entry['name']` tal cual lo da el listado crudo de `pokemon-species` de PokeAPI —
+el nombre de la ESPECIE. `PokemonCard`/`PokemonTable` enlazan a `/ficha/{ese nombre}`
+asumiendo que coincide con el nombre de la variante `pokemon` por defecto — cierto
+para la inmensa mayoría (`bulbasaur` especie → `bulbasaur` variante), pero **NO para
+Zygarde**: su variante por defecto se llama `zygarde-50` (Forma 50%), no `zygarde` a
+secas. `PokemonFichaAssembler::assemble()` buscaba directamente una variante `pokemon`
+llamada exactamente `"zygarde"` — no existía esa fila (solo `zygarde-50` etc.), de
+ahí el "no cacheado" pese a que el dato sí estaba.
+
+**No es un caso aislado**: confirmado por SQL contra los ~1025 pares especie/variante
+por defecto cacheados — **37 especies** tienen este mismo desajuste (Deoxys→
+`deoxys-normal`, Giratina→`giratina-altered`, Aegislash→`aegislash-shield`,
+Toxtricity→`toxtricity-amped`, Urshifu→`urshifu-single-strike`, Basculin, Darmanitan,
+Tornadus/Thundurus/Landorus/Enamorus, Meloetta, Pumpkaboo/Gourgeist, Oricorio,
+Lycanroc, Mimikyu, Eiscue, Indeedee, Morpeko, Basculegion, Oinkologne, Maushold,
+Squawkabilly, Palafin, Tatsugiri, Dudunsparce...) — cualquiera de estos daba el mismo
+falso "no cacheado" al abrirse desde la lista.
+
+**Fix, en el punto de entrada único en vez de en cada enlace**: nuevo
+`PokeApiResourceCacheRepository::findPokemonWithSpeciesFallback(idOrName)` — intenta
+`findByTypeAndIdOrName('pokemon', idOrName)` primero (caso normal, sin cambios); si
+falla, prueba `idOrName` como especie, y si la encuentra, resuelve su
+`varieties[].is_default` y reintenta la búsqueda `pokemon` con ESE nombre. Compartido
+por `PokemonFichaAssembler::assemble()` (la ficha) y
+`PokemonFichaCacheService::cacheMissing()` (botón "Cachear todo lo que falta" —
+mismo `idOrName` de la URL, mismo bug potencial, se detectó al revisar todos los
+usos de `findByTypeAndIdOrName('pokemon', ...)` antes de dar el fix por completo).
+Deliberadamente en el REPOSITORIO (no parcheado en `PokemonListService`/frontend):
+cubre los 37 casos a la vez sin importar de dónde venga el enlace (lista, tabla,
+cadena evolutiva, búsqueda futura...), en vez de tener que acordarse de arreglar cada
+sitio nuevo que genere un `/ficha/{nombre}` a partir del nombre de especie.
+
+**Verificado por curl**: `/api/pokemon/zygarde/ficha` → `pokemon.name` = `zygarde-50`
+(antes 404 "no cacheado"); `/api/pokemon/deoxys/ficha` → `deoxys-normal` (mismo
+patrón, otra de las 37); `/api/pokemon/bulbasaur/ficha` sin cambios (caso normal,
+sigue resolviendo directo); nombre inventado (`totally-fake-name-xyz`) sigue dando
+404 correcto (el fallback no esconde errores reales). `php -l` sin errores en los 3
+archivos tocados.

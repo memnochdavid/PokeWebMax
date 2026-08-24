@@ -30,7 +30,7 @@ class PokemonFichaAssembler
      */
     public function assemble(string $idOrName): array
     {
-        $pokemon = $this->repository->findByTypeAndIdOrName('pokemon', $idOrName);
+        $pokemon = $this->repository->findPokemonWithSpeciesFallback($idOrName);
         if ($pokemon === null) {
             throw new PokemonNotCachedException($idOrName);
         }

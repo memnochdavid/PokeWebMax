@@ -91,7 +91,14 @@ export default function PokemonListPage() {
       )}
 
       {pokemon.length > 0 && (
-        <>
+        // Panel de filtros + resultados como 2 columnas (antes apiladas a todo el
+        // ancho) — pedido explícito de David 2026-08-24, para aprovechar mejor el
+        // espacio: el panel de filtros no necesita todo el ancho de la página, y
+        // dejarlo a la izquierda deja sitio a que la cuadrícula de resultados use el
+        // resto en vez de quedar debajo de todo. Ver `.layout` en el CSS para la
+        // cadena de flexbox/grid que le da a `.resultsColumn` un alto real sin
+        // adivinar ningún número (mismo patrón ya probado en PokemonFichaPage).
+        <div className={styles.layout}>
           <PokemonFilters
             filters={filters}
             onSetFilter={setFilter}
@@ -151,60 +158,62 @@ export default function PokemonListPage() {
             }
           />
 
-          {exclusiveOnly && pendingEncounterIds.length > 0 && encountersCache.status !== 'running' && (
-            <p className={styles.encountersBanner}>
-              {t('list.exclusiveDataMissing', { count: pendingEncounterIds.length })}{' '}
-              <button
-                type="button"
-                className={styles.encountersButton}
-                onClick={() =>
-                  encountersCache.start(pendingEncounterIds, {
-                    onDone: reload,
-                  })
-                }
-              >
-                {t('list.cacheEncountersButton', { count: pendingEncounterIds.length })}
-              </button>
-            </p>
-          )}
-
-          {encountersCache.status === 'running' && (
-            <p className={styles.encountersBanner}>
-              {t('list.cachingEncountersButton', { done: encountersCache.done, total: encountersCache.total })}
-            </p>
-          )}
-
-          <div className={styles.results}>
-            {visible.length === 0 ? (
-              <p className={styles.empty}>{t('list.emptyFiltered')}</p>
-            ) : viewMode === 'table' ? (
-              <PokemonTable
-                entries={visible}
-                names={names}
-                language={language}
-                sortKey={sortKey}
-                sortDirection={sortDirection}
-                onSetSortKey={setSortKey}
-                onToggleSortDirection={toggleSortDirection}
-              />
-            ) : (
-              <ul className={styles.grid}>
-                {visible.map((entry) => (
-                  <li key={entry.id}>
-                    <PokemonCard
-                      id={entry.id}
-                      name={entry.name}
-                      displayName={names[entry.id]?.names[language] ?? capitalize(entry.name.replace(/-/g, ' '))}
-                      sprite={officialArtworkUrl(entry.id)}
-                      types={entry.types}
-                      number={entry.displayNumber}
-                    />
-                  </li>
-                ))}
-              </ul>
+          <div className={styles.resultsColumn}>
+            {exclusiveOnly && pendingEncounterIds.length > 0 && encountersCache.status !== 'running' && (
+              <p className={styles.encountersBanner}>
+                {t('list.exclusiveDataMissing', { count: pendingEncounterIds.length })}{' '}
+                <button
+                  type="button"
+                  className={styles.encountersButton}
+                  onClick={() =>
+                    encountersCache.start(pendingEncounterIds, {
+                      onDone: reload,
+                    })
+                  }
+                >
+                  {t('list.cacheEncountersButton', { count: pendingEncounterIds.length })}
+                </button>
+              </p>
             )}
+
+            {encountersCache.status === 'running' && (
+              <p className={styles.encountersBanner}>
+                {t('list.cachingEncountersButton', { done: encountersCache.done, total: encountersCache.total })}
+              </p>
+            )}
+
+            <div className={styles.results}>
+              {visible.length === 0 ? (
+                <p className={styles.empty}>{t('list.emptyFiltered')}</p>
+              ) : viewMode === 'table' ? (
+                <PokemonTable
+                  entries={visible}
+                  names={names}
+                  language={language}
+                  sortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSetSortKey={setSortKey}
+                  onToggleSortDirection={toggleSortDirection}
+                />
+              ) : (
+                <ul className={styles.grid}>
+                  {visible.map((entry) => (
+                    <li key={entry.id}>
+                      <PokemonCard
+                        id={entry.id}
+                        name={entry.name}
+                        displayName={names[entry.id]?.names[language] ?? capitalize(entry.name.replace(/-/g, ' '))}
+                        sprite={officialArtworkUrl(entry.id)}
+                        types={entry.types}
+                        number={entry.displayNumber}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
-        </>
+        </div>
       )}
     </section>
   )

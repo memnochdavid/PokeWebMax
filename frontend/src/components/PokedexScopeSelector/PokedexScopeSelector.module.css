@@ -1,7 +1,24 @@
 .row {
   display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* Ámbito + región/juego comparten línea (ver comentario en el JSX) — `.select` aquí
+   dentro gana `flex:1;min-width:0` (en vez del `min-width:9rem` fijo de siempre) para
+   que ambos se repartan el ancho disponible y quepan a la vez incluso en la columna
+   angosta de filtros de la lista, en vez de depender de overflow o de una anchura de
+   sobra que no siempre hay. `flex-wrap` de sobra por si el contenedor es TAN angosto
+   que ni encogidos caben (ver min de abajo). */
+.rowPrimary {
+  display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
+}
+
+.rowPrimary .select {
+  flex: 1;
+  min-width: 6rem;
 }
 
 .select {
@@ -32,12 +49,12 @@
 }
 
 @media (max-width: 600px) {
-  .row {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .select {
+  /* `.row > .select` (no `.rowPrimary .select`) a propósito: el select de edición (el
+     único hijo directo de `.row` que es un `<select>`) sí debe ir a ancho completo en
+     viewports muy estrechos, pero forzarlo también dentro de `.rowPrimary` rompería el
+     "misma línea" que se acaba de pedir — ahí ya se encoge/envuelve solo por su propio
+     `flex-wrap` si de verdad no cabe, sin necesitar este empujón. */
+  .row > .select {
     width: 100%;
   }
 }

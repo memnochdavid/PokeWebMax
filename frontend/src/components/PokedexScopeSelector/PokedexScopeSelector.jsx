@@ -35,18 +35,25 @@ export default function PokedexScopeSelector({
 
   return (
     <div className={styles.row}>
-      <select
-        className={styles.select}
-        value={pokedexScope}
-        onChange={(e) => onSetScope(e.target.value)}
-      >
-        <option value="national">{t('list.scopeNational')}</option>
-        <option value="regional">{t('list.scopeRegional')}</option>
-        <option value="game">{t('list.scopeGame')}</option>
-      </select>
+      {/* Los dos primeros selects (ámbito + región/juego) comparten línea a
+          propósito — pedido explícito de David 2026-08-24, tras verlo en la columna
+          angosta de filtros (ver PokemonListPage.module.css): "en lugar de meterle un
+          overflow, podemos aprovechar el espacio horizontal". El 3er select
+          (edición, solo con región de varias Pokédex) y el checkbox de "solo
+          exclusivos" se quedan en su propia línea debajo — nunca coexisten los 3
+          selects completos en la misma fila, hay sitio de sobra para uno solo. */}
+      <div className={styles.rowPrimary}>
+        <select
+          className={styles.select}
+          value={pokedexScope}
+          onChange={(e) => onSetScope(e.target.value)}
+        >
+          <option value="national">{t('list.scopeNational')}</option>
+          <option value="regional">{t('list.scopeRegional')}</option>
+          <option value="game">{t('list.scopeGame')}</option>
+        </select>
 
-      {pokedexScope === 'regional' && (
-        <>
+        {pokedexScope === 'regional' && (
           <select
             className={styles.select}
             value={pokedexRegion}
@@ -59,26 +66,9 @@ export default function PokedexScopeSelector({
               </option>
             ))}
           </select>
+        )}
 
-          {pokedexRegion && pokedexOptionsForRegion.length > 1 && (
-            <select
-              className={styles.select}
-              value={pokedexName}
-              onChange={(e) => onSetPokedexName(e.target.value)}
-            >
-              <option value="">{t('list.editionPlaceholder')}</option>
-              {pokedexOptionsForRegion.map((entry) => (
-                <option key={entry.name} value={entry.name}>
-                  {entry.label[language] ?? entry.label.es ?? entry.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </>
-      )}
-
-      {pokedexScope === 'game' && (
-        <>
+        {pokedexScope === 'game' && (
           <select
             className={styles.select}
             value={versionName}
@@ -91,18 +81,33 @@ export default function PokedexScopeSelector({
               </option>
             ))}
           </select>
+        )}
+      </div>
 
-          {versionName && hasSiblingVersions && (
-            <label className={styles.checkboxLabel}>
-              <input
-                type="checkbox"
-                checked={exclusiveOnly}
-                onChange={(e) => onSetExclusiveOnly(e.target.checked)}
-              />
-              {t('list.exclusiveOnly')}
-            </label>
-          )}
-        </>
+      {pokedexScope === 'regional' && pokedexRegion && pokedexOptionsForRegion.length > 1 && (
+        <select
+          className={styles.select}
+          value={pokedexName}
+          onChange={(e) => onSetPokedexName(e.target.value)}
+        >
+          <option value="">{t('list.editionPlaceholder')}</option>
+          {pokedexOptionsForRegion.map((entry) => (
+            <option key={entry.name} value={entry.name}>
+              {entry.label[language] ?? entry.label.es ?? entry.name}
+            </option>
+          ))}
+        </select>
+      )}
+
+      {pokedexScope === 'game' && versionName && hasSiblingVersions && (
+        <label className={styles.checkboxLabel}>
+          <input
+            type="checkbox"
+            checked={exclusiveOnly}
+            onChange={(e) => onSetExclusiveOnly(e.target.checked)}
+          />
+          {t('list.exclusiveOnly')}
+        </label>
       )}
     </div>
   )

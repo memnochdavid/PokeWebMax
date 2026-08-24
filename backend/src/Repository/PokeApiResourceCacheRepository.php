@@ -24,6 +24,43 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
     }
 
     /**
+     * `pokemon` cacheado para `idOrName`, con fallback a través de la especie si
+     * `idOrName` no coincide con ninguna variante `pokemon` directamente — bug real
+     * encontrado 2026-08-24: David abrió la ficha de Zygarde desde la lista y salió
+     * "no cacheado" pese a que la especie SÍ lo estaba. Causa: la lista de Pokémon
+     * (y otros sitios — la cadena evolutiva, por ejemplo) enlazan con el nombre de la
+     * ESPECIE (`pokemon-species.name`, lo único que PokeAPI expone en listados
+     * genéricos), asumiendo que coincide con el nombre de su variante `pokemon` por
+     * defecto — cierto para la inmensa mayoría, pero NO para 37 especies confirmadas
+     * por SQL directo (Zygarde, Deoxys, Giratina, Aegislash, Toxtricity, Urshifu...)
+     * donde la variante por defecto tiene su propio nombre distinto (`zygarde` →
+     * `zygarde-50`, `deoxys` → `deoxys-normal`...).
+     *
+     * Compartido por PokemonFichaAssembler (ver ficha) y PokemonFichaCacheService
+     * (ver botón "Cachear todo lo que falta") — ambos reciben el mismo `idOrName` de
+     * la URL, así que ambos necesitan el mismo fallback. Vive aquí, en el único punto
+     * de entrada real, en vez de duplicarlo en los dos.
+     */
+    public function findPokemonWithSpeciesFallback(string $idOrName): ?PokeApiResourceCache
+    {
+        $pokemon = $this->findByTypeAndIdOrName('pokemon', $idOrName);
+        if ($pokemon !== null) {
+            return $pokemon;
+        }
+
+        $species = $this->findByTypeAndIdOrName('pokemon-species', $idOrName);
+        $defaultVarietyName = null;
+        foreach ($species?->getPayload()['varieties'] ?? [] as $variety) {
+            if ($variety['is_default'] ?? false) {
+                $defaultVarietyName = $variety['pokemon']['name'] ?? null;
+                break;
+            }
+        }
+
+        return $defaultVarietyName !== null ? $this->findByTypeAndIdOrName('pokemon', $defaultVarietyName) : null;
+    }
+
+    /**
      * Versión ligera para listados: solo resourceId + fetchedAt, sin cargar el
      * `payload` completo — con recursos de miles de filas (item, move...) hidratar la
      * entidad entera agota la memoria de PHP para nada, ya que el listado solo necesita
