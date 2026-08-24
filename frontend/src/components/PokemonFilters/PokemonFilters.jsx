@@ -23,6 +23,7 @@ export default function PokemonFilters({
   sortDirection,
   onToggleSortDirection,
   headerControls,
+  generationPager,
 }) {
   const { language } = useLanguage()
   const { t } = useTranslation()
@@ -98,6 +99,17 @@ export default function PokemonFilters({
             </button>
           ))}
         </div>
+
+        {/* Pedido explícito de David 2026-08-24: el pager de generación, en la misma
+            línea que el resto de toggles (Legendario/Singular/Mega/Gigamax/Regional/
+            Etapas) — antes tenía su propia fila debajo, dentro del panel pero en
+            línea aparte. `GenerationPager` es un `<nav>` con su propio `flex-wrap`
+            interno, así que sus pestañas envuelven como grupo junto al resto de
+            botones de este mismo `.toggleRow` (también `flex-wrap`), no una fila
+            nueva. El propio PokemonListPage decide cuándo mostrarlo (solo sin filtro
+            de búsqueda ni de Pokédex activo), este componente solo lo coloca si le
+            llega algo. */}
+        {generationPager && <div className={styles.pagerGroup}>{generationPager}</div>}
 
         {filtering && (
           <button type="button" className={styles.clear} onClick={onReset}>

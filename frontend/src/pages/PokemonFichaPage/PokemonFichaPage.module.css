@@ -57,11 +57,50 @@
    `flex: 1; min-height: 0` — recibe el alto real de `.page` (flexbox, ver arriba) en
    vez de crecer a su contenido; con eso, la fila implícita de este grid (auto, sin
    `grid-template-rows` propio) se estira para llenarlo por defecto
-   (`align-content: normal` ≈ `stretch` en Grid), y de ahí `.hero`/`.main` heredan un
-   alto real y exacto sin que nadie tenga que calcularlo en vh. */
+   (`align-content: normal` ≈ `stretch` en Grid), y de ahí `.hero`/`.main`/
+   `.globalVersionPicker` heredan un alto real y exacto sin que nadie tenga que
+   calcularlo en vh.
+   3ª columna (`.globalVersionPicker`, el selector de juego) pedida por David
+   2026-08-24: como condiciona TODA la ficha, se saca de dentro de `.main` a su propia
+   columna con scroll interno, en vez de una fila que le robaba alto vertical a
+   `.content` al envolver en varias líneas (ver bug de scroll externo a 1080p, misma
+   sección de arriba — un motivo más para que esta fila no siguiera compitiendo por
+   alto con el resto). El orden en el DOM es hero → picker → main (mejor apilado en
+   móvil, ver su media query) pero el orden VISUAL en desktop es hero(1) → main(2) →
+   picker(3) — se desacopla con `grid-column` explícito en cada uno.
+   **Dos bugs reales encontrados con una captura de David tras este cambio** (ambos
+   corregidos aquí):
+   1. Con `grid-column` explícito fuera del orden del DOM (picker=col3 colocado ANTES
+      que main=col2 en el DOM), el algoritmo de auto-colocación de Grid (empaquetado
+      "sparse", por defecto) avanza su cursor según el orden del DOM y NO vuelve atrás
+      a rellenar huecos ya pasados — `.main` acababa en una fila 2 aparte, debajo de
+      todo, en vez de la fila 1 junto a `.hero`/`.globalVersionPicker`. Arreglado con
+      `grid-row: 1` explícito en los tres (más fiable que `grid-auto-flow: dense`,
+      que depende de que el navegador decida rellenar huecos — esto lo deja
+      inequívoco).
+   2. La fila `auto` no se estiraba al alto real de `.layout` en la práctica (medía
+      ~378px, lo que pedía su contenido, con hueco vacío debajo) — la premisa de que
+      `align-content: normal` se comporta como `stretch` para una fila `auto` no se
+      cumplía tal cual. Arreglado con `grid-template-rows: minmax(0, 1fr)` explícito:
+      la única fila ocupa el 100% del alto de `.layout` sin ambigüedad, el `minmax(0,
+      ...)` deja que encoja por debajo del contenido si hiciera falta (mismo `min-
+      height:0` en espíritu que ya llevan `.hero`/`.main`/`.globalVersionPicker`). */
 .layout {
   display: grid;
-  grid-template-columns: clamp(380px, 25vw, 560px) 1fr;
+  /* La 3ª pista (columna del selector de juego) angosta a propósito — pedido David
+     2026-08-24, "no necesita tanto ancho, solo el suficiente para cubrir los chips".
+     Primer intento (`clamp(140px,11vw,180px)`) seguía sobrando: `.versionCover`
+     (5rem/80px fijos) se alineaba a la izquierda del hueco extra dejando una franja
+     vacía a la derecha — confirmado con DevTools en una captura de David. Recortado a
+     lo justo: 80px de carátula + 16px de padding horizontal de la tarjeta (`0.5rem`
+     cada lado, ver `.globalVersionPicker`) + ~16px de margen para la propia scrollbar
+     de `.versionPicker` (`overflow-y:auto`, su ancho varía por SO/navegador, esto es
+     un margen de sobra sin acoplarse a un valor exacto) ≈ 112px. `.versionPicker`
+     también pasa a `align-items:center` (antes `stretch` por defecto) para que tanto
+     la carátula como los chips de texto queden centrados en vez de pegados a la
+     izquierda del hueco que sobre. */
+  grid-template-columns: clamp(380px, 25vw, 560px) 1fr clamp(112px, 8vw, 132px);
+  grid-template-rows: minmax(0, 1fr);
   gap: 1.75rem;
   align-items: stretch;
   flex: 1;
@@ -71,12 +110,22 @@
 @media (max-width: 900px) {
   .layout {
     grid-template-columns: 1fr;
-    /* .hero/.content vuelven a alto automático en móvil (ver sus propios media
-       queries) — sin esto, `flex:1;min-height:0` seguiría intentando encajar la
-       columna apilada dentro del alto restante de `.page` y recortaría contenido en
-       vez de dejar crecer la página con scroll normal. */
+    /* .hero/.content/.globalVersionPicker vuelven a alto automático en móvil (ver sus
+       propios media queries) — sin esto, `flex:1;min-height:0` seguiría intentando
+       encajar la columna apilada dentro del alto restante de `.page` y recortaría
+       contenido en vez de dejar crecer la página con scroll normal. `grid-column:auto`
+       en los tres — con una sola columna definida, el `grid-column:3` explícito de
+       `.globalVersionPicker` (ver abajo) crearía columnas implícitas extra en vez de
+       apilar, que es justo lo que NO se quiere aquí. */
     flex: none;
     min-height: auto;
+  }
+
+  .hero,
+  .main,
+  .globalVersionPicker {
+    grid-column: auto;
+    grid-row: auto;
   }
 }
 
@@ -91,6 +140,8 @@
   gap: 1.25rem;
   min-width: 0;
   min-height: 0;
+  grid-column: 2;
+  grid-row: 1;
 }
 
 .status {
@@ -118,6 +169,8 @@
   color: #fff;
   border: 1px solid var(--line);
   box-shadow: 0 24px 48px -28px rgba(0, 0, 0, 0.55);
+  grid-column: 1;
+  grid-row: 1;
 }
 
 .heroBands {
@@ -659,37 +712,72 @@
   overflow: visible;
 }
 
-/* Selector único de juego a nivel de página (antes vivía solo dentro de DESC) — mismo
-   .versionPicker/.versionChip/.versionCover de siempre, con una etiqueta corta delante
-   para dejar claro que ahora condiciona toda la ficha y no solo la descripción. */
+/* Selector único de juego, 3ª columna del grid de `.layout` (antes vivía solo dentro
+   de DESC, luego una fila horizontal entre .tabs y .content — ver comentario de
+   `.layout` para el porqué del cambio 2026-08-24). Tarjeta propia, mismo lenguaje
+   visual que `.hero`/`.content` (fondo/borde/sombra a juego) — dos zonas: la etiqueta
+   fija arriba (`.globalVersionLabel`, `flex-shrink:0`, nunca scrollea) y la lista de
+   juegos (`.versionPicker`) que absorbe con SU PROPIO scroll (`flex:1;min-height:0;
+   overflow-y:auto`) el resto del alto de la columna — mismo patrón head-fijo/body-
+   scrollable que ya usa `.content` con sus secciones, aplicado aquí a una escala más
+   pequeña. `min-height: 0` en el propio `.globalVersionPicker` es lo que le permite
+   aceptar el alto exacto que le da el `stretch` de `.layout` en vez de crecer a su
+   contenido (mismo motivo que `.main`/`.hero`, ver `.layout`). */
 .globalVersionPicker {
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-  flex-shrink: 0;
-  padding: 0.6rem 0.4rem;
-  margin-bottom: 0.6rem;
+  flex-direction: column;
+  min-height: 0;
+  grid-column: 3;
+  grid-row: 1;
+  padding: 1rem 0.5rem;
+  background: var(--chassis-900);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  box-shadow: 0 24px 48px -32px rgba(0, 0, 0, 0.45);
+}
+
+@media (max-width: 900px) {
+  .globalVersionPicker {
+    /* Mismo criterio que `.content` en móvil: un scroll anidado se siente peor que el
+       scroll de página normal en touch, así que se desactiva el tope y la lista de
+       juegos vuelve a fluir en el documento como una fila que envuelve. */
+    flex: none;
+    min-height: auto;
+  }
+
+  .versionPicker {
+    flex: none;
+    min-height: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    overflow: visible;
+  }
 }
 
 .globalVersionLabel {
+  flex-shrink: 0;
   font-family: var(--font-mono);
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   opacity: 0.7;
   white-space: nowrap;
+  margin-bottom: 0.75rem;
 }
 
 .versionPicker {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: center;
   gap: 0.4rem;
-  margin-bottom: 0.9rem;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .versionChip {
   cursor: pointer;
+  flex-shrink: 0;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--chassis-900);
@@ -727,6 +815,14 @@
   position: relative;
   width: 5rem;
   height: 5rem;
+  /* `flex-shrink: 0` imprescindible — bug real encontrado 2026-08-24 con captura de
+     David: un flex item con `overflow` distinto de `visible` (justo el `overflow:
+     hidden` de aquí abajo) pasa a tener tamaño mínimo automático 0 en vez de su alto
+     especificado, así que con `flex-shrink` por defecto (1) y espacio insuficiente en
+     `.versionPicker` (columna angosta, 30+ carátulas) el navegador las encogía TODAS
+     hasta que cupieran a la vez, en vez de desbordar y dejar que `overflow-y:auto` de
+     `.versionPicker` hiciera scroll de verdad. */
+  flex-shrink: 0;
   padding: 0;
   border: 2px solid var(--line);
   border-radius: 0.5rem;

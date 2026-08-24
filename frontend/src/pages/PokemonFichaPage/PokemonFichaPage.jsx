@@ -546,48 +546,20 @@ export default function PokemonFichaPage() {
         </div>
       </header>
 
-      <div className={styles.main}>
-      <nav className={styles.tabs}>
-        <Link to="/" className={styles.backLink}>
-          ← {t('ficha.backToList')}
-        </Link>
-        <div className={styles.tabPills}>
-          {FICHA_SECTIONS.map(({ key, label, missingKey }) => {
-            const count = sectionMissingCount(missing, missingKey)
-            // openSection, no el `section` del scrollspy: con el acordeón de una sola
-            // sección + scroll-al-abrir, la pestaña resaltada debe reflejar cuál está
-            // realmente desplegada, no cuál anda más cerca del borde superior del
-            // scroll interno (eso derivaba hacia la sección siguiente en cuanto se
-            // scrolleaba dentro de una sección larga, aunque siguiera siendo la
-            // abierta). `section` se queda solo para la conmutación de vista en móvil.
-            const active = openSection === key
-            return (
-              <button
-                key={key}
-                type="button"
-                className={styles.tab}
-                style={active ? { background: primaryColor, color: '#fff' } : undefined}
-                onClick={() => scrollToSection(key)}
-              >
-                <span className={styles.tabIcon}>{SECTION_ICONS[key]}</span>
-                {label[language]}
-                {count > 0 && <span className={styles.badge}>{count}</span>}
-              </button>
-            )
-          })}
-        </div>
-      </nav>
-
       {allVersionNames.length > 0 && (
         // Selector único de juego para TODA la ficha (antes vivía solo dentro de
-        // DESC, condicionando únicamente el texto de la Pokédex) — mismos
-        // versionCover/versionChip/gameCoverUrl de siempre, ahora fuera de las 7
-        // secciones para que EVOS/MOVES/STATS/ABILITY/tipos lo lean también (ver
-        // activeVersionGroup/activeGeneration más arriba). Recorre allVersionNames
-        // (de versionMeta/pokedex_numbers), no `versions` (de flavor_text_entries) —
-        // hay juegos sin descripción propia todavía en PokeAPI que igualmente deben
-        // poder elegirse aquí (ver comentario junto a `versions` más arriba).
-        <div className={styles.globalVersionPicker}>
+        // DESC, condicionando únicamente el texto de la Pokédex; luego una fila
+        // horizontal entre .tabs y .content) — pedido por David 2026-08-24: como
+        // condiciona TODA la info de la ficha, pasa a ser su propia 3ª columna del
+        // grid de .layout (mismo alto que .hero/.main vía el `stretch` ya establecido,
+        // ver .layout más abajo), con scroll interno propio en vez de competir por
+        // alto vertical con .content envolviendo en varias líneas. Mismos
+        // versionCover/versionChip/gameCoverUrl de siempre, sin tocar su lógica —
+        // recorre allVersionNames (de versionMeta/pokedex_numbers), no `versions` (de
+        // flavor_text_entries) — hay juegos sin descripción propia todavía en PokeAPI
+        // que igualmente deben poder elegirse aquí (ver comentario junto a `versions`
+        // más arriba).
+        <aside className={styles.globalVersionPicker}>
           <span className={styles.globalVersionLabel}>{t('ficha.gameSelectorLabel')}</span>
           <div className={styles.versionPicker}>
             {allVersionNames.map((versionName) => {
@@ -627,8 +599,40 @@ export default function PokemonFichaPage() {
               )
             })}
           </div>
-        </div>
+        </aside>
       )}
+
+      <div className={styles.main}>
+      <nav className={styles.tabs}>
+        <Link to="/" className={styles.backLink}>
+          ← {t('ficha.backToList')}
+        </Link>
+        <div className={styles.tabPills}>
+          {FICHA_SECTIONS.map(({ key, label, missingKey }) => {
+            const count = sectionMissingCount(missing, missingKey)
+            // openSection, no el `section` del scrollspy: con el acordeón de una sola
+            // sección + scroll-al-abrir, la pestaña resaltada debe reflejar cuál está
+            // realmente desplegada, no cuál anda más cerca del borde superior del
+            // scroll interno (eso derivaba hacia la sección siguiente en cuanto se
+            // scrolleaba dentro de una sección larga, aunque siguiera siendo la
+            // abierta). `section` se queda solo para la conmutación de vista en móvil.
+            const active = openSection === key
+            return (
+              <button
+                key={key}
+                type="button"
+                className={styles.tab}
+                style={active ? { background: primaryColor, color: '#fff' } : undefined}
+                onClick={() => scrollToSection(key)}
+              >
+                <span className={styles.tabIcon}>{SECTION_ICONS[key]}</span>
+                {label[language]}
+                {count > 0 && <span className={styles.badge}>{count}</span>}
+              </button>
+            )
+          })}
+        </div>
+      </nav>
 
       <div className={styles.content}>
         <section

@@ -135,6 +135,20 @@ export default function PokemonListPage() {
                 </div>
               </>
             }
+            generationPager={
+              // Pedido explícito de David 2026-08-24: pasa de vivir suelto entre el
+              // panel de filtros y los resultados a formar parte del propio panel
+              // (ver PokemonFilters.jsx/.module.css) — la página sigue siendo quien
+              // decide CUÁNDO mostrarlo (solo sin filtro de búsqueda ni de Pokédex
+              // activo), el componente solo reserva el hueco si le llega algo.
+              !filtering && !pokedexFilterActive ? (
+                <GenerationPager
+                  generations={generations}
+                  activeGeneration={activeGeneration}
+                  onSelect={setActiveGeneration}
+                />
+              ) : null
+            }
           />
 
           {exclusiveOnly && pendingEncounterIds.length > 0 && encountersCache.status !== 'running' && (
@@ -158,14 +172,6 @@ export default function PokemonListPage() {
             <p className={styles.encountersBanner}>
               {t('list.cachingEncountersButton', { done: encountersCache.done, total: encountersCache.total })}
             </p>
-          )}
-
-          {!filtering && !pokedexFilterActive && (
-            <GenerationPager
-              generations={generations}
-              activeGeneration={activeGeneration}
-              onSelect={setActiveGeneration}
-            />
           )}
 
           <div className={styles.results}>

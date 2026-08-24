@@ -2748,3 +2748,195 @@ sobre la banda (dependía de que ambos colores coincidieran EXACTO, verificado p
 código — `TYPE_COLORS` en JS y el `fill` de cada SVG vienen de la misma fuente
 portada de DexterWeb — pero no comprobado píxel a píxel a ojo) y que la posición no
 choca con el selector de género en Pokémon con esa opción (ej. `/ficha/25` Pikachu).
+
+## Selector de juego como 3ª columna de la ficha, con scroll propio — HECHO 2026-08-24
+
+David propuso que, como el selector de juego condiciona TODA la info de la ficha (ver
+sesión "Selector de juego único en la ficha" del 23-08), pasara de fila horizontal
+(entre `.tabs` y `.content`, con `flex-wrap` a varias líneas) a una 3ª columna a la
+derecha, con su propio scroll interno, del mismo alto que `.hero`/`.main`. Encaja
+además con el arreglo del scroll externo de esta misma sesión: esa fila con wrap era
+precisamente el chrome de altura variable que rompía el cálculo de alto de `.content`.
+
+**Implementado** apoyándose en el mismo mecanismo de `stretch` de `.layout` ya
+establecido para `.hero`/`.main` (ver sección del bug de 1080p, arriba):
+- `PokemonFichaPage.jsx`: el bloque del selector (antes `<div>` entre `.tabs` y
+  `.content`, dentro de `.main`) pasa a `<aside className={styles.globalVersionPicker}>`,
+  hermano directo de `.hero`/`.main` dentro de `.layout` — se saca de `.main` por
+  completo. Ninguna lógica tocada (mismo `allVersionNames`/`versionCover`/
+  `versionChip`/`setVersion`).
+- **Orden en el DOM vs. orden visual, desacoplados a propósito**: el DOM queda
+  hero → picker → main (mejor apilado en móvil: ver Pokémon, elegir juego, luego
+  pestañas/contenido — antes el selector aparecía DESPUÉS de las pestañas). El orden
+  VISUAL en desktop es hero(col 1) → main(col 2) → picker(col 3), logrado con
+  `grid-column` explícito en cada uno (`.hero{grid-column:1}`,
+  `.main{grid-column:2}`, `.globalVersionPicker{grid-column:3}`) en vez de depender
+  del orden de creación — el auto-placement de Grid rellenaría el hueco igual sin
+  esto, pero se dejó explícito por claridad. En el media query móvil existente
+  (`max-width:900px`) los tres vuelven a `grid-column:auto`: con una sola columna
+  definida ahí, dejar el `grid-column:3` fijo habría creado columnas implícitas extra
+  en vez de apilar.
+- `.layout`: `grid-template-columns` gana una 3ª pista
+  (`clamp(200px, 16vw, 260px)`) para la columna del selector.
+- `.globalVersionPicker`: tarjeta propia (mismo lenguaje visual que `.hero`/`.content`
+  — fondo/borde/radio/sombra a juego), con `min-height:0` para aceptar el alto exacto
+  del `stretch` (mismo motivo que `.main`, ver comentario de `.layout`). Dentro, dos
+  zonas: `.globalVersionLabel` (fija arriba, `flex-shrink:0`, nunca scrollea) +
+  `.versionPicker` (`flex:1;min-height:0;overflow-y:auto`, EL que absorbe el resto del
+  alto con scroll propio) — mismo patrón cabecera-fija/cuerpo-scrollable que ya usa
+  `.content` con sus 7 secciones, a escala más pequeña. `.versionPicker` pasa de fila
+  (`flex-wrap:wrap`) a columna (`flex-direction:column`) — con el ancho estrecho de la
+  columna, los chips de texto se estiran a ancho completo (`align-items:stretch` por
+  defecto en flex-column, ninguno tiene `width` propio) y leen como un menú vertical;
+  las carátulas (`.versionCover`, 5rem×5rem fijos) simplemente se apilan una por fila,
+  sin tocar su CSS.
+- Móvil (`max-width:900px`): `.globalVersionPicker`/`.versionPicker` vuelven a
+  `flex:none;min-height:auto` y `.versionPicker` recupera `flex-direction:row;
+  flex-wrap:wrap;overflow:visible` — mismo criterio que `.content` en móvil (un
+  scroll anidado se siente peor que el scroll de página normal en touch), la lista
+  vuelve a fluir como fila que envuelve en el documento.
+
+**Trade-off conocido, no crítico**: el orden de tabulación por teclado cambia en
+desktop (ahora los botones del selector de juego son focoables ANTES que
+`.backLink`/las pestañas, porque el DOM quedó hero→picker→main) — aceptado a cambio
+de la mejora de apilado en móvil; si en algún momento molesta, se puede fijar con
+`order` CSS sin tocar el DOM.
+
+**Verificado**: `oxlint` 0 errores/warnings, Vite sirve JSX y CSS módulo sin
+`PARSE_ERROR` (`docker compose logs frontend` limpio). **No visto a ojo en el
+navegador** — mismo hueco de `claude-in-chrome` de siempre; David debería confirmar
+que la columna queda de verdad a la misma altura que hero/contenido, que su scroll
+interno funciona con Pokémon de muchos juegos (ej. Pikachu, 30+ entradas) y que en
+móvil el selector se ve razonable como fila que envuelve (comportamiento no
+verificado a ojo, cambio de posición en el flujo respecto a antes).
+
+### Dos bugs de Grid reales, encontrados por David con captura (`a.png`) — HECHO 2026-08-24
+
+David probó la 3ª columna y compartió una captura (Raichu): el hero salía CORTO con
+un hueco vacío enorme debajo, y `.main` (pestañas + `.content`) aparecía en una fila
+aparte, muy por debajo, desalineado con hero/columna de juego. La columna de juego
+también mostraba lo que parecían líneas finas sin estilo en vez de chips — sin
+confirmar todavía si era síntoma del mismo bug o algo aparte (ver "Pendiente" abajo).
+
+**Causa 1 — auto-colocación de Grid, orden del DOM vs. `grid-column` explícito**: el
+DOM quedó hero → picker(col3) → main(col2) (a propósito, para el apilado en móvil,
+ver sección anterior). El algoritmo de auto-colocación por defecto (empaquetado
+"sparse") avanza un cursor según el orden del DOM y NUNCA vuelve atrás a rellenar un
+hueco ya pasado: al colocar `picker` en la columna 3 antes de que `main` tuviera su
+turno, el cursor ya había avanzado más allá de la columna 2 de la fila 1 — `main`
+acabó en una fila 2 nueva. La suposición de la sesión anterior ("el auto-placement
+rellena el hueco solo") era **incorrecta**, no verificada contra el comportamiento
+real del navegador.
+
+**Causa 2 — la fila no se estiraba al alto real**: la premisa de que `align-content:
+normal` se comporta como `stretch` para una fila `auto` de Grid tampoco se cumplió en
+la práctica — la fila medía solo lo que pedía su contenido (~378px), no el alto real
+que `.layout` tenía disponible vía la cadena de flexbox.
+
+**Fix**: `grid-row: 1` explícito en `.hero`/`.main`/`.globalVersionPicker` (evita
+depender del auto-placement — inequívoco pase lo que pase con el orden) +
+`.layout` gana `grid-template-rows: minmax(0, 1fr)` explícito (la única fila ocupa el
+100% del alto de `.layout`, sin depender de si el navegador trata `align-content:
+normal` como stretch o no). Reset a `grid-row: auto` junto al `grid-column: auto` ya
+existente en el media query móvil (`max-width:900px`).
+
+**Lección para la próxima vez que se toque este archivo**: las dos suposiciones que
+fallaron aquí (auto-placement rellena huecos; `align-content:normal` ≈ stretch) son
+comportamiento de Grid genuinamente sutil y fácil de razonar mal sin comprobarlo — con
+3+ grid-items con `grid-column`/`grid-row` explícitos fuera de orden, más vale fijar
+`grid-row` a mano en todos y `grid-template-rows` explícito en vez de fiarse del
+comportamiento por defecto.
+
+**Verificado**: Vite sirve el CSS módulo sin `PARSE_ERROR`. Con la captura de David
+tras este fix (hero/main/columna de juego ya alineados e igualados en alto,
+confirmando causa 1 y 2 arreglados) se vio el problema pendiente con más claridad:
+las "líneas finas" eran en realidad las ~30-46 carátulas de juego (`.versionCover`,
+5rem×5rem) TODAS comprimidas para caber a la vez en el alto visible, sin scrollbar.
+
+### Tercer bug de la misma captura: la columna comprimía en vez de scrollear — HECHO 2026-08-24
+
+**Causa**: `.versionCover` tiene `overflow: hidden` (para recortar la carátula al
+borde redondeado) — y un flex item con `overflow` distinto de `visible` tiene su
+**tamaño mínimo automático a 0** en vez de basado en su contenido/alto especificado
+(comportamiento real de flexbox, no un bug del navegador). Con `flex-shrink` por
+defecto (1) y `.versionPicker` sin alto suficiente para 30+ carátulas de 5rem, el
+algoritmo de flexbox las encogía a TODAS proporcionalmente hasta que cupieran, en vez
+de dejarlas desbordar — y sin desbordamiento real, `overflow-y: auto` nunca tenía
+nada que scrollear.
+
+**Fix**: `flex-shrink: 0` explícito en `.versionCover` (imprescindible, es la causa
+real) y en `.versionChip` (no tenía el mismo problema por no llevar `overflow`
+propio, pero se añade por consistencia/robustez explícita, mismo criterio que
+`.tabs`/`.cacheBar`/`.globalVersionPicker` en sesiones anteriores). Con esto, los
+ítems mantienen su tamaño real y es `.versionPicker` (`overflow-y:auto`) quien
+scrollea de verdad cuando no caben todos.
+
+**Lección**: cualquier ítem con tamaño fijo DENTRO de un contenedor flex con scroll
+interno necesita `flex-shrink: 0` explícito si además tiene su propio `overflow`
+distinto de `visible` — si no, el navegador prioriza encoger-para-caber sobre
+desbordar-y-scrollear, silenciosamente, sin ningún error ni warning.
+
+**Verificado**: Vite sirve el CSS módulo sin `PARSE_ERROR`. **No visto a ojo en el
+navegador todavía** — pendiente de que David confirme con una captura nueva que las
+carátulas ya mantienen su tamaño real (5rem×5rem) y que la columna scrollea en vez de
+comprimir.
+
+**Ajuste de ancho, mismo hilo, dos pasadas**: David pidió estrechar la 3ª columna —
+"no necesita tanto ancho, solo el suficiente para cubrir los chips".
+1. Primera pasada: `clamp(200px, 16vw, 260px)` → `clamp(140px, 11vw, 180px)`. David
+   confirmó con una captura de DevTools que seguía sobrando: `.versionCover`
+   (5rem/80px fijos) se quedaba alineada a la izquierda del hueco extra, dejando una
+   franja vacía a la derecha visible en el inspector (padding morado + margen verde
+   de sobra).
+2. Segunda pasada, recorte real: `clamp(112px, 8vw, 132px)` — 80px de carátula + 16px
+   de padding horizontal de la tarjeta (`.globalVersionPicker` pasa de `padding:1rem`
+   a `padding:1rem 0.5rem`, más ajustado en horizontal) + margen de sobra para la
+   propia scrollbar de `.versionPicker`. `.versionPicker` gana `align-items:center`
+   (antes `stretch` por defecto) para que carátulas Y chips de texto queden centrados
+   en la columna angosta en vez de pegados a la izquierda.
+
+David confirmó que esta columna ya "se ve como debería" tras las tres pasadas
+anteriores (colocación en Grid, scroll interno de verdad, ancho ajustado) — cierra el
+hilo de la 3ª columna del selector de juego.
+
+## Pager de generación dentro del panel de filtros (lista de Pokémon) — HECHO 2026-08-24
+
+David pidió que el `GenerationPager` (pestañas I-IX de la vista `/pokemon`) pasara a
+vivir DENTRO del panel de filtros (`PokemonFilters`) en vez de ser un elemento suelto
+entre el panel y la cuadrícula de resultados. Mismo criterio que ya se aplicó antes a
+`controlsRow` (el selector de Pokédex + modo de vista, que también se metió dentro del
+panel en su momento, "para que quede junto al resto de controles que acotan qué se ve
+en la lista") — se sigue el patrón de slot ya establecido con `headerControls` en vez
+de inventar uno nuevo.
+
+- `PokemonFilters.jsx`: nueva prop `generationPager` (nodo React opcional, mismo
+  patrón que `headerControls`) — se renderiza en una fila nueva (`.pagerRow`, borde
+  superior separador, mismo criterio visual que `.controlsRow`) al final del panel,
+  después de `toggleRow`/`resultCount`. El componente NO decide cuándo mostrarlo, solo
+  reserva el hueco si le llega contenido — la condición de visibilidad
+  (`!filtering && !pokedexFilterActive`) se queda en la página, donde ya vivía.
+- `PokemonListPage.jsx`: el `<GenerationPager>` que antes se renderizaba como hermano
+  suelto entre `<PokemonFilters>` y `.results` ahora se pasa como children de la prop
+  `generationPager` de `PokemonFilters`, envuelto en la misma condición que tenía
+  antes. Cero cambios de lógica, solo de dónde vive en el árbol.
+- `GenerationPager`/`.module.css` sin tocar — sus `.tab` ya usan
+  `background: var(--chassis-900)`, el mismo fondo que el panel que ahora los
+  envuelve, así que se integran por el `border` (como el resto de botones toggle del
+  panel) sin quedar como "caja dentro de caja".
+
+**Verificado**: `oxlint` 0 errores/warnings en los 2 archivos JSX tocados, Vite sirve
+JSX/CSS módulo sin `PARSE_ERROR`. **No visto a ojo en el navegador** — mismo hueco de
+`claude-in-chrome` de siempre, pendiente de que David confirme el resultado visual.
+
+**Ajuste inmediato, mismo hilo**: David pidió que el pager quedara en la MISMA línea
+que el resto de toggles (Legendario/Singular/Mega/Gigamax/Regional/Etapas), no en su
+propia fila dentro del panel. Se quitó el wrapper `.pagerRow` (con su borde separador)
+y `{generationPager}` pasa a renderizarse directamente dentro de `.toggleRow`, justo
+después del grupo de etapas — como `GenerationPager` es un `<nav>` con su propio
+`flex-wrap` interno, sus pestañas envuelven como grupo junto al resto de botones de
+ese mismo `.toggleRow` (también `flex-wrap`) en vez de forzar una fila nueva.
+
+**Separador, mismo hilo**: David pidió el mismo separador `|` que ya distingue el
+grupo de Etapas del resto de toggles. `{generationPager}` envuelto en
+`<div className={styles.pagerGroup}>`, con la misma regla que `.evoGroup`
+(`border-left:1px solid var(--line)` + `padding-left`/`margin-left` a juego).

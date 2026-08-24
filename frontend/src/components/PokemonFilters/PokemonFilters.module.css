@@ -133,6 +133,15 @@
   padding: 0.35rem 0.6rem;
 }
 
+/* Mismo separador que `.evoGroup` (borde izquierdo + hueco) — pedido explícito de
+   David 2026-08-24, para que el pager de generación se distinga del resto de toggles
+   en la misma línea igual que ya se distingue el grupo de Etapas. */
+.pagerGroup {
+  padding-left: 0.5rem;
+  margin-left: 0.2rem;
+  border-left: 1px solid var(--line);
+}
+
 .clear {
   cursor: pointer;
   border: none;
