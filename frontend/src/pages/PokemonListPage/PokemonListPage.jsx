@@ -40,8 +40,6 @@ export default function PokemonListPage() {
     visible,
     pokedexScope,
     setPokedexScope,
-    pokedexMode,
-    setPokedexMode,
     pokedexRegion,
     setPokedexRegion,
     pokedexName,
@@ -63,16 +61,18 @@ export default function PokemonListPage() {
     : []
 
   const eyebrow = (() => {
-    if (pokedexScope !== 'regional') return t('list.eyebrow')
-    if (pokedexMode === 'region') {
+    if (pokedexScope === 'regional') {
       const edition = pokedexCatalog.pokedexes.find((p) => p.name === pokedexName)
       if (edition) return edition.label[language] ?? edition.label.es ?? edition.name
       if (pokedexRegion) return regionLabel(pokedexRegion, language)
-    } else {
+      return t('list.scopeRegional')
+    }
+    if (pokedexScope === 'game') {
       const version = pokedexCatalog.versions.find((v) => v.name === versionName)
       if (version) return version.label[language] ?? version.label.es ?? version.name
+      return t('list.scopeGame')
     }
-    return t('list.scopeRegional')
+    return t('list.eyebrow')
   })()
 
   return (
@@ -107,8 +107,6 @@ export default function PokemonListPage() {
                 <PokedexScopeSelector
                   pokedexScope={pokedexScope}
                   onSetScope={setPokedexScope}
-                  pokedexMode={pokedexMode}
-                  onSetMode={setPokedexMode}
                   pokedexRegion={pokedexRegion}
                   onSetRegion={setPokedexRegion}
                   pokedexName={pokedexName}

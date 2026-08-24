@@ -27,6 +27,7 @@ import { itemIconUrl } from '../../utils/itemSprite.js'
 import { compareValues } from '../../utils/sorting.js'
 import {
   FICHA_SECTIONS,
+  LEGACY_STAT_LABELS,
   damageClassIconUrl,
   damageClassName,
   evolutionStages,
@@ -36,6 +37,10 @@ import {
   latestVersionedText,
   moveLearnMethod,
   moveLearnMethodName,
+  movesForVersionGroup,
+  resolveHistoricalStats,
+  resolvePastBySlot,
+  resolvePastTypes,
   sectionMissingCount,
   speciesDisplayName,
   totalMissing,
@@ -315,21 +320,71 @@ export default function PokemonFichaPage() {
   if (status === 'error') return <p className={styles.statusError}>{error}</p>
   if (!ficha?.pokemon) return null
 
-  const { species, evolutionChain, moves, abilities, forms, missing, wikidexFlavorText } = ficha
-  const types = pokemon.types.map((t) => t.type.name)
+  const { species, evolutionChain, moves, abilities, forms, missing, wikidexFlavorText, wikidexVarietyFlavorText, versionMeta } = ficha
+
+  // Selector único de juego (ver globalVersionPicker más abajo, antes vivía solo
+  // dentro de DESC): resuelve el `version` elegido a `version_group`/`generation` con
+  // el `versionMeta` que ya manda el backend (PokemonFichaAssembler) para poder
+  // filtrar EVOS/MOVES por juego y STATS/ABILITY/tipos por generación. Sin selección
+  // (selectedVersion null, estado inicial), todo lo de abajo se queda en `null` y cada
+  // función de pokemonFicha.js cae a su comportamiento por defecto de siempre.
+  const activeMeta = selectedVersion ? versionMeta?.[selectedVersion] : null
+  const activeVersionGroup = activeMeta?.versionGroup ?? null
+  const activeGeneration = activeMeta?.generation ?? null
+
+  const types = resolvePastTypes(pokemon, activeGeneration).map((t) => t.type.name)
   const primaryColor = typeColor(types[0])
   const secondaryColor = typeColor(types[1] ?? types[0])
   const missingTotal = totalMissing(missing)
   const generation = generationNumber(species)
 
+  // `versions` (con texto) alimenta solo el panel de DESC — `allVersionNames` (de
+  // versionMeta, ver backend) es la lista real de juegos a ofrecer en el selector
+  // global: se comprobó con datos reales que muchos Pokémon "veteranos" no tienen
+  // flavor_text_entries en juegos recientes (ej. Pikachu sin texto de Escarlata/
+  // Púrpura pese a estar confirmado en la Pokédex de Paldea, nº 74) — versionMeta ya
+  // resuelve esto con pokedex_numbers en vez de solo con el texto. Si se elige un
+  // juego sin texto propio, `versions.find` no lo encuentra y DESC debe decirlo (no
+  // caer al texto de OTRO juego): el fallback a `versions[0]` solo aplica cuando
+  // todavía no se ha elegido nada.
   const versions = flavorTextsByVersion(species, language, wikidexFlavorText)
-  const activeVersion = versions.find((v) => v.version === selectedVersion) ?? versions[0]
+  const allVersionNames = Object.keys(versionMeta ?? {})
+  const activeVersion = selectedVersion ? versions.find((v) => v.version === selectedVersion) : versions[0]
+  // Qué chip resaltar en el selector: el juego elegido, o el más antiguo con
+  // descripción como valor por defecto (mismo criterio visual que ya tenía DESC antes
+  // de este selector) — independiente de `activeVersion`, que ahora puede quedarse
+  // `undefined` a propósito cuando el juego elegido no tiene texto.
+  const highlightedVersion = selectedVersion ?? versions[0]?.version
   const displayName = speciesDisplayName(species, language, capitalize(pokemon.name))
 
   // Hoisted fuera del JSX de la sección EVOS para poder reusarlo también como subtítulo
   // de la cabecera colapsada (ver sectionPreviews) sin recalcularlo dos veces.
-  const evoStagesList = evolutionChain ? evolutionStages(evolutionChain, t, itemNames, language) : []
-  const statsTotal = pokemon.stats.reduce((sum, s) => sum + s.base_stat, 0)
+  const evoStagesList = evolutionChain
+    ? evolutionStages(evolutionChain, t, itemNames, language, activeVersionGroup)
+    : []
+  // Igual que evoStagesList: movimientos que de verdad se pueden aprender en el juego
+  // elegido (sin selección, la lista completa de siempre) — se reusa tanto en la
+  // preview de la pestaña como en la tabla de la sección.
+  const scopedMoves = movesForVersionGroup(moves, pokemon.moves, activeVersionGroup)
+  const { order: statOrder, stats: statsToShow } = resolveHistoricalStats(pokemon, activeGeneration)
+  const statsTotal = statsToShow.reduce((sum, s) => sum + s.base_stat, 0)
+  // Habilidades disponibles en el juego elegido (ver resolvePastBySlot en
+  // pokemonFicha.js) — algunos slots concretos se sumaron más tarde que otros (ej. la
+  // oculta, no antes de gen V): un slot que resuelve a `ability: null` para la
+  // generación activa no está disponible todavía. `past_abilities` solo registra
+  // CAMBIOS respecto al valor actual, así que un slot que nunca cambió (ej. el primero
+  // de Clefairy) no aparece ahí y resolvePastBySlot lo deja tal cual — por eso antes de
+  // gen III hace falta un corte aparte: la habilidad como mecánica de juego no existía
+  // todavía, con independencia de qué diga el histórico de cada slot.
+  const historicalAbilitySlots =
+    activeGeneration != null && activeGeneration < 3
+      ? []
+      : resolvePastBySlot(pokemon.past_abilities, pokemon.abilities, activeGeneration, 'slot')
+  const availableAbilityNames = new Set(
+    historicalAbilitySlots.filter((slot) => slot.ability).map((slot) => slot.ability.name),
+  )
+  const scopedAbilities =
+    activeGeneration == null ? abilities : abilities.filter((a) => availableAbilityNames.has(a.name))
   // Subtítulo de una línea bajo cada título de sección, visible tanto colapsada como
   // abierta — mitiga que la ficha se vea "vacía" con todo colapsado por defecto (ver
   // .claude/memory/project_pokewebmax_progress.md, decisión de David de colapsar todo
@@ -338,8 +393,8 @@ export default function PokemonFichaPage() {
     DESC: versions.length > 0 ? t('ficha.previewVersions', { count: versions.length }) : null,
     EVOS: evoStagesList.length > 0 ? t('ficha.previewStages', { count: evoStagesList.length }) : null,
     STATS: t('ficha.previewStatsTotal', { value: statsTotal }),
-    ABILITY: abilities.length > 0 ? t('ficha.previewAbilities', { count: abilities.length }) : null,
-    MOVES: moves.length > 0 ? t('ficha.previewMoves', { count: moves.length }) : null,
+    ABILITY: scopedAbilities.length > 0 ? t('ficha.previewAbilities', { count: scopedAbilities.length }) : null,
+    MOVES: scopedMoves.length > 0 ? t('ficha.previewMoves', { count: scopedMoves.length }) : null,
     INFO: species ? t('ficha.previewBaseExp', { value: pokemon.base_experience ?? '—' }) : null,
     FORM: forms.length > 0 ? t('ficha.previewForms', { count: forms.length }) : null,
   }
@@ -463,6 +518,11 @@ export default function PokemonFichaPage() {
             <span className={styles.number}>{formatPokedexNumber(pokemon.id)}</span>
           </div>
           {genusForLanguage(species, language) && <p className={styles.genus}>{genusForLanguage(species, language)}</p>}
+          <div className={styles.typesRow}>
+            {types.map((typeName) => (
+              <TypeBadge key={typeName} type={typeName} />
+            ))}
+          </div>
           {generation && <span className={styles.genChip}>G-{generation}</span>}
           <div className={styles.metrics}>
             <span className={styles.metricChip}>
@@ -507,6 +567,58 @@ export default function PokemonFichaPage() {
         </div>
       </nav>
 
+      {allVersionNames.length > 0 && (
+        // Selector único de juego para TODA la ficha (antes vivía solo dentro de
+        // DESC, condicionando únicamente el texto de la Pokédex) — mismos
+        // versionCover/versionChip/gameCoverUrl de siempre, ahora fuera de las 7
+        // secciones para que EVOS/MOVES/STATS/ABILITY/tipos lo lean también (ver
+        // activeVersionGroup/activeGeneration más arriba). Recorre allVersionNames
+        // (de versionMeta/pokedex_numbers), no `versions` (de flavor_text_entries) —
+        // hay juegos sin descripción propia todavía en PokeAPI que igualmente deben
+        // poder elegirse aquí (ver comentario junto a `versions` más arriba).
+        <div className={styles.globalVersionPicker}>
+          <span className={styles.globalVersionLabel}>{t('ficha.gameSelectorLabel')}</span>
+          <div className={styles.versionPicker}>
+            {allVersionNames.map((versionName) => {
+              const flavorEntry = versions.find((v) => v.version === versionName)
+              const active = versionName === highlightedVersion
+              const cover = gameCoverUrl(versionName)
+              const versionLabel = capitalize(versionName.replace(/-/g, ' '))
+              const showEnTag = flavorEntry != null && !flavorEntry.translated
+
+              if (cover) {
+                return (
+                  <button
+                    key={versionName}
+                    type="button"
+                    className={active ? `${styles.versionCover} ${styles.versionCoverActive}` : styles.versionCover}
+                    style={active ? { borderColor: primaryColor, boxShadow: `0 0 0 3px ${primaryColor}4d` } : undefined}
+                    onClick={() => setVersion(versionName)}
+                    title={versionLabel}
+                  >
+                    <img src={cover} alt={versionLabel} />
+                    {showEnTag && <span className={styles.versionCoverTag}>EN</span>}
+                  </button>
+                )
+              }
+
+              return (
+                <button
+                  key={versionName}
+                  type="button"
+                  className={active ? `${styles.versionChip} ${styles.versionChipActive}` : styles.versionChip}
+                  style={active ? { background: primaryColor, borderColor: primaryColor, color: '#fff' } : undefined}
+                  onClick={() => setVersion(versionName)}
+                >
+                  {versionLabel}
+                  {showEnTag && <span className={styles.tag}>EN</span>}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       <div className={styles.content}>
         <section
           id="ficha-DESC"
@@ -517,62 +629,43 @@ export default function PokemonFichaPage() {
           <SectionHeading label={sectionLabel.DESC[language]} sectionKey="DESC" openSection={openSection} onToggle={toggleCollapse} color={primaryColor} icon={SECTION_ICONS.DESC} preview={sectionPreviews.DESC} />
           <div className={collapseWrapClassName(styles, 'DESC', openSection)}>
           <div className={styles.collapseInner}>
-            {versions.length > 0 ? (
-              <>
-                <div className={styles.versionPicker}>
-                  {versions.map((v) => {
-                    const active = v.version === activeVersion?.version
-                    const cover = gameCoverUrl(v.version)
-                    const versionLabel = capitalize(v.version.replace(/-/g, ' '))
-
-                    if (cover) {
-                      return (
-                        <button
-                          key={v.version}
-                          type="button"
-                          className={active ? `${styles.versionCover} ${styles.versionCoverActive}` : styles.versionCover}
-                          style={active ? { borderColor: primaryColor, boxShadow: `0 0 0 3px ${primaryColor}4d` } : undefined}
-                          onClick={() => setVersion(v.version)}
-                          title={versionLabel}
-                        >
-                          <img src={cover} alt={versionLabel} />
-                          {!v.translated && <span className={styles.versionCoverTag}>EN</span>}
-                        </button>
-                      )
-                    }
-
-                    return (
-                      <button
-                        key={v.version}
-                        type="button"
-                        className={active ? `${styles.versionChip} ${styles.versionChipActive}` : styles.versionChip}
-                        style={active ? { background: primaryColor, borderColor: primaryColor, color: '#fff' } : undefined}
-                        onClick={() => setVersion(v.version)}
-                      >
-                        {versionLabel}
-                        {!v.translated && <span className={styles.tag}>EN</span>}
-                      </button>
-                    )
-                  })}
+            {wikidexVarietyFlavorText ? (
+              // Megaevolución/Gigamax: WikiDex tiene una descripción PROPIA de la
+              // forma (aspecto, cómo cambia al transformarse...) que PokeAPI no tiene
+              // en absoluto — comparte la de la especie base para todas sus variantes,
+              // ver PokemonFichaAssembler. Pedida por David 2026-08-24: se prioriza
+              // sobre la ficha por juego de abajo, que para estas formas solo
+              // describiría al Pokémon base, no a la forma que se está viendo. No hay
+              // variación por juego en este texto (WikiDex solo tiene una descripción
+              // por forma), así que no se ata a `activeVersion`/al selector de juego.
+              <div className={styles.descPanel} style={{ '--desc-accent': primaryColor }}>
+                <div className={styles.descPanelHeader}>
+                  <span className={styles.descLed} />
+                  <span>{t('ficha.descEntry')}</span>
+                  <span className={styles.descPanelVersion}>{t('ficha.descVarietySource')}</span>
                 </div>
-
-                <div className={styles.descPanel} style={{ '--desc-accent': primaryColor }}>
-                  <div className={styles.descPanelHeader}>
-                    <span className={styles.descLed} />
-                    <span>{t('ficha.descEntry')}</span>
-                    <span className={styles.descPanelVersion}>
-                      {capitalize(activeVersion.version.replace(/-/g, ' '))}
-                    </span>
-                  </div>
-                  <p className={styles.quote} key={activeVersion.version}>
-                    {activeVersion.text}
-                    <span className={styles.cursor} aria-hidden="true" />
-                  </p>
-                  {!activeVersion.translated && (
-                    <span className={styles.notTranslated}>{t('ficha.notTranslated')}</span>
-                  )}
+                <p className={styles.quote}>
+                  {wikidexVarietyFlavorText}
+                  <span className={styles.cursor} aria-hidden="true" />
+                </p>
+              </div>
+            ) : activeVersion ? (
+              <div className={styles.descPanel} style={{ '--desc-accent': primaryColor }}>
+                <div className={styles.descPanelHeader}>
+                  <span className={styles.descLed} />
+                  <span>{t('ficha.descEntry')}</span>
+                  <span className={styles.descPanelVersion}>
+                    {capitalize(activeVersion.version.replace(/-/g, ' '))}
+                  </span>
                 </div>
-              </>
+                <p className={styles.quote} key={activeVersion.version}>
+                  {activeVersion.text}
+                  <span className={styles.cursor} aria-hidden="true" />
+                </p>
+                {!activeVersion.translated && (
+                  <span className={styles.notTranslated}>{t('ficha.notTranslated')}</span>
+                )}
+              </div>
             ) : (
               <p>{t('ficha.descriptionUnavailable')}</p>
             )}
@@ -645,14 +738,20 @@ export default function PokemonFichaPage() {
           <div className={collapseWrapClassName(styles, 'STATS', openSection)}>
           <div className={styles.collapseInner}>
           <div className={styles.statsPanel}>
-            <StatRadarChart stats={pokemon.stats} color={primaryColor} animate={statsAnimated} />
+            <StatRadarChart
+              stats={statsToShow}
+              color={primaryColor}
+              animate={statsAnimated}
+              order={statOrder ?? undefined}
+              labels={statOrder ? LEGACY_STAT_LABELS : undefined}
+            />
             <div className={styles.statBars}>
-              {STAT_ORDER.map((name) => {
-                const value = pokemon.stats.find((s) => s.stat.name === name)?.base_stat ?? 0
+              {(statOrder ?? STAT_ORDER).map((name) => {
+                const value = statsToShow.find((s) => s.stat.name === name)?.base_stat ?? 0
                 const percent = Math.min((value / MAX_STAT) * 100, 100)
                 return (
                   <div key={name} className={styles.statBarRow}>
-                    <span className={styles.statBarLabel}>{STAT_LABELS[name]}</span>
+                    <span className={styles.statBarLabel}>{(statOrder ? LEGACY_STAT_LABELS : STAT_LABELS)[name]}</span>
                     <div className={styles.statBarTrack}>
                       <div
                         className={styles.statBarFill}
@@ -681,33 +780,37 @@ export default function PokemonFichaPage() {
           <SectionHeading label={sectionLabel.ABILITY[language]} sectionKey="ABILITY" openSection={openSection} onToggle={toggleCollapse} color={primaryColor} icon={SECTION_ICONS.ABILITY} preview={sectionPreviews.ABILITY} />
           <div className={collapseWrapClassName(styles, 'ABILITY', openSection)}>
           <div className={styles.collapseInner}>
-          <ul className={styles.cardList}>
-            {abilities.map((a) => {
-              const hidden = pokemon.abilities.find((slot) => slot.ability.name === a.name)?.is_hidden
-              const { text: effect, translated } = latestVersionedText(
-                a.payload?.flavor_text_entries,
-                language,
-                'flavor_text',
-                ficha.wikidexEffectText?.ability?.[a.id],
-              )
-              const abilityName = localizedName(a.payload, language, capitalize(a.name.replace(/-/g, ' ')))
+          {scopedAbilities.length === 0 ? (
+            <p>{t('ficha.noAbilitiesInGame')}</p>
+          ) : (
+            <ul className={styles.cardList}>
+              {scopedAbilities.map((a) => {
+                const hidden = historicalAbilitySlots.find((slot) => slot.ability?.name === a.name)?.is_hidden
+                const { text: effect, translated } = latestVersionedText(
+                  a.payload?.flavor_text_entries,
+                  language,
+                  'flavor_text',
+                  ficha.wikidexEffectText?.ability?.[a.id],
+                )
+                const abilityName = localizedName(a.payload, language, capitalize(a.name.replace(/-/g, ' ')))
 
-              return (
-                <li key={a.id} className={styles.card}>
-                  <div className={styles.cardHeader}>
-                    <strong>{abilityName}</strong>
-                    {hidden && <span className={styles.tag}>{t('ficha.hiddenAbility')}</span>}
-                    {effect && !translated && <span className={styles.tag}>EN</span>}
-                  </div>
-                  {a.cached ? (
-                    <p>{effect ?? t('ficha.noDescription')}</p>
-                  ) : (
-                    <p className={styles.notCached}>{t('ficha.notCachedAbility')}</p>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
+                return (
+                  <li key={a.id} className={styles.card}>
+                    <div className={styles.cardHeader}>
+                      <strong>{abilityName}</strong>
+                      {hidden && <span className={styles.tag}>{t('ficha.hiddenAbility')}</span>}
+                      {effect && !translated && <span className={styles.tag}>EN</span>}
+                    </div>
+                    {a.cached ? (
+                      <p>{effect ?? t('ficha.noDescription')}</p>
+                    ) : (
+                      <p className={styles.notCached}>{t('ficha.notCachedAbility')}</p>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
           </div>
           </div>
         </section>
@@ -721,6 +824,9 @@ export default function PokemonFichaPage() {
           <SectionHeading label={sectionLabel.MOVES[language]} sectionKey="MOVES" openSection={openSection} onToggle={toggleCollapse} color={primaryColor} icon={SECTION_ICONS.MOVES} preview={sectionPreviews.MOVES} />
           <div className={collapseWrapClassName(styles, 'MOVES', openSection)}>
           <div className={`${styles.collapseInner} ${movesSettled ? styles.collapseInnerSticky : ''}`}>
+          {activeVersionGroup && scopedMoves.length === 0 ? (
+            <p>{t('ficha.noMovesInGame')}</p>
+          ) : (
           <table className={styles.moveTable}>
             <thead>
               <tr>
@@ -735,9 +841,9 @@ export default function PokemonFichaPage() {
               </tr>
             </thead>
             <tbody>
-              {moves
+              {scopedMoves
                 .map((m) => {
-                  const { method, level } = moveLearnMethod(pokemon.moves, m.name)
+                  const { method, level } = moveLearnMethod(pokemon.moves, m.name, activeVersionGroup)
                   return {
                     ...m,
                     learnMethod: method,
@@ -821,6 +927,7 @@ export default function PokemonFichaPage() {
                 })}
             </tbody>
           </table>
+          )}
           </div>
           </div>
         </section>

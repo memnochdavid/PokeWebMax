@@ -87,13 +87,13 @@ function matchesFilters(entry, filters, displayName) {
 
 const EMPTY_CATALOG = { pokedexes: [], versions: [] }
 
-// Ámbito Nacional/Regional (por región o por juego, ver PokedexScopeSelector y
+// Ámbito Nacional/Regional/Juego (ver PokedexScopeSelector y
 // .claude/memory/project_pokewebmax_progress.md) — resuelve a la lista de nombres de
-// Pokédex (`entry.pokedexNumbers` keys) que hay que exigir en cada Pokémon. En modo
-// juego puede ser más de una a la vez (ej. Espada/Escudo → galar + isle-of-armor +
+// Pokédex (`entry.pokedexNumbers` keys) que hay que exigir en cada Pokémon. En ámbito
+// Juego puede ser más de una a la vez (ej. Espada/Escudo → galar + isle-of-armor +
 // crown-tundra), por eso siempre es un array, no un único nombre.
-function resolvePokedexNames(mode, pokedexName, versionName, catalog) {
-  if (mode === 'region') {
+function resolvePokedexNames(scope, pokedexName, versionName, catalog) {
+  if (scope === 'regional') {
     return pokedexName ? [pokedexName] : []
   }
   const version = catalog.versions.find((v) => v.name === versionName)
@@ -120,15 +120,14 @@ export default function usePokemonBrowser(pokemonList, { names = {}, language = 
   const [sortKey, setSortKey] = useState(stored?.sortKey ?? 'number')
   const [sortDirection, setSortDirection] = useState(stored?.sortDirection ?? 'asc')
 
-  const [pokedexScope, setPokedexScopeState] = useState(stored?.pokedexScope ?? 'national') // 'national' | 'regional'
-  const [pokedexMode, setPokedexModeState] = useState(stored?.pokedexMode ?? 'region') // 'region' | 'game'
+  const [pokedexScope, setPokedexScopeState] = useState(stored?.pokedexScope ?? 'national') // 'national' | 'regional' | 'game'
   const [pokedexRegion, setPokedexRegionState] = useState(stored?.pokedexRegion ?? '')
   const [pokedexName, setPokedexName] = useState(stored?.pokedexName ?? '')
   const [versionName, setVersionNameState] = useState(stored?.versionName ?? '')
   // "Solo exclusivos de este juego" (necesita encuentros cacheados por especie, ver
-  // PokemonListPage — botón contextual) — solo tiene sentido en modo Juego con una
+  // PokemonListPage — botón contextual) — solo tiene sentido en ámbito Juego con una
   // versión elegida que tenga "hermanas" en su grupo (ej. Espada/Escudo). Se resetea
-  // cada vez que cambia el juego elegido, no solo el modo/ámbito.
+  // cada vez que cambia el juego elegido, no solo el ámbito.
   const [exclusiveOnly, setExclusiveOnlyState] = useState(stored?.exclusiveOnly ?? false)
 
   useEffect(() => {
@@ -138,7 +137,6 @@ export default function usePokemonBrowser(pokemonList, { names = {}, language = 
       sortKey,
       sortDirection,
       pokedexScope,
-      pokedexMode,
       pokedexRegion,
       pokedexName,
       versionName,
@@ -150,7 +148,6 @@ export default function usePokemonBrowser(pokemonList, { names = {}, language = 
     sortKey,
     sortDirection,
     pokedexScope,
-    pokedexMode,
     pokedexRegion,
     pokedexName,
     versionName,
@@ -159,14 +156,6 @@ export default function usePokemonBrowser(pokemonList, { names = {}, language = 
 
   const setPokedexScope = (scope) => {
     setPokedexScopeState(scope)
-    setPokedexModeState('region')
-    setPokedexRegionState('')
-    setPokedexName('')
-    setVersionNameState('')
-    setExclusiveOnlyState(false)
-  }
-  const setPokedexMode = (mode) => {
-    setPokedexModeState(mode)
     setPokedexRegionState('')
     setPokedexName('')
     setVersionNameState('')
@@ -194,10 +183,10 @@ export default function usePokemonBrowser(pokemonList, { names = {}, language = 
 
   const resolvedPokedexNames = useMemo(
     () =>
-      pokedexScope === 'regional'
-        ? resolvePokedexNames(pokedexMode, activePokedexName, versionName, pokedexCatalog)
+      pokedexScope !== 'national'
+        ? resolvePokedexNames(pokedexScope, activePokedexName, versionName, pokedexCatalog)
         : [],
-    [pokedexScope, pokedexMode, activePokedexName, versionName, pokedexCatalog],
+    [pokedexScope, activePokedexName, versionName, pokedexCatalog],
   )
   const pokedexFilterActive = resolvedPokedexNames.length > 0
 
@@ -249,7 +238,7 @@ export default function usePokemonBrowser(pokemonList, { names = {}, language = 
         ? pokemonList
         : pokemonList.filter((entry) => entry.generation === activeGeneration)
     const exclusiveFiltered =
-      pokedexMode === 'game' && exclusiveOnly && versionName && hasSiblingVersions
+      pokedexScope === 'game' && exclusiveOnly && versionName && hasSiblingVersions
         ? base.filter(
             (entry) =>
               entry.encounterVersions?.includes(versionName) &&
@@ -270,7 +259,7 @@ export default function usePokemonBrowser(pokemonList, { names = {}, language = 
     filtering,
     activeGeneration,
     pokedexFilterActive,
-    pokedexMode,
+    pokedexScope,
     exclusiveOnly,
     versionName,
     hasSiblingVersions,
@@ -309,8 +298,6 @@ export default function usePokemonBrowser(pokemonList, { names = {}, language = 
     visible,
     pokedexScope,
     setPokedexScope,
-    pokedexMode,
-    setPokedexMode,
     pokedexRegion,
     setPokedexRegion,
     pokedexName: activePokedexName,

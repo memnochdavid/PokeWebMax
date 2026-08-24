@@ -2301,3 +2301,345 @@ sirven 200 sin error de transform. **No visto a ojo en el navegador** (sin
 devtools en modo responsive (320/375/768px) o desde el móvil, y que confirme
 específicamente que `PokemonFichaPage` no cambió nada visualmente en desktop/tablet
 (el único cambio ahí son las 2 líneas `minmax`).
+
+## Selector de Pokédex de la lista: 3º select en vez de 4º select de "modo" — HECHO 2026-08-23
+
+David pidió simplificar el selector de la lista (ver sección "Selector de Pokédex
+regional / por juego en la lista" del 2026-08-19, arriba): en vez de Nacional/Regional →
+(si Regional) Región/Juego → Región concreta, quería un único primer select con 3
+opciones directas — Nacional, Regional, Por juego — para que nunca coexistan 3 selects a
+la vez (antes sí podían darse los 3: ámbito + modo + región).
+
+**Cambio**: se fusiona `pokedexScope` (`'national'|'regional'`) y `pokedexMode`
+(`'region'|'game'`) de `usePokemonBrowser.js` en un único `pokedexScope` de 3 valores
+(`'national'|'regional'|'game'`) — `pokedexMode` desaparece del todo (state, setter,
+props, `resolvePokedexNames()` pasa a recibir `scope` en vez de `mode`).
+`PokedexScopeSelector.jsx` pasa de 2 selects encadenados (ámbito → modo) a 1 solo con las
+3 opciones; Regional sigue llevando a un select de región (y, si la región tiene >1
+Pokédex, al 3er select de edición ya existente — ese caso puntual de 3 selects a la vez
+se mantiene a propósito, no es el "select de modo siempre visible" que David quería
+quitar). Nueva clave i18n `scopeGame` ("Por juego"/"By game"), se retiran `modeRegion`/
+`modeGame` (ya sin uso).
+
+**Verificado**: `oxlint` del contenedor (ya no daba `Permission denied` esta sesión,
+0 errores) + Vite/HMR compilando limpio. No visto a ojo en el navegador (sin
+`claude-in-chrome` conectado esta sesión).
+
+## Selector de juego único en la ficha (Descripción/Evolución/Movimientos/Stats/Habilidades/Tipos por juego) — HECHO 2026-08-23
+
+Disparador: David preguntó si se podía saber qué movimientos aprendía un Pokémon en un
+juego CONCRETO (la lista de movimientos de la ficha mostraba solo el método/nivel "más
+moderno", colapsando todos los juegos en uno). Investigación previa confirmó que sí:
+PokeAPI ya trae `version_group_details` completo por movimiento y el backend YA reenvía
+el payload de `pokemon` sin recortar — el dato estaba ahí, solo se tiraba en el frontend
+(`moveLearnMethod()` cogía el método "más prioritario" y el nivel del `version_group` más
+reciente). De ahí surgió la idea de un selector de juego único a nivel de ficha (hoy solo
+existía dentro de DESC, condicionando solo el texto de Pokédex) que condicionara TODA la
+ficha, no solo descripción y movimientos — confirmado con el ejemplo real de Clefairy
+(Normal en 1ª gen, Hada desde la 6ª).
+
+**Auditado antes de tocar nada** qué secciones tienen de verdad variación por juego en
+PokeAPI (con SQL directo sobre la caché, no solo teoría) — 3 granularidades distintas
+conviven: `version` (juego individual, usado en descripciones/objetos), `version_group`
+(pareja de juegos, usado en movimientos/evolución/formas cosméticas) y `generation`
+(usado en `past_types`/`past_abilities`/`past_stats`). Alcance acordado: DESC/EVOS/MOVES
+con filtrado limpio por juego; STATS/ABILITY además con manejo de salto de generación
+(stat "Special" combinado pre-split en gen I, habilidades inexistentes antes de gen III);
+INFO sin cambios (sin datos históricos en PokeAPI para esos campos); FORM fuera de
+alcance (variantes/megas no traen versión de forma limpia). Se añadió también un badge de
+**tipo(s)** en la cabecera de la ficha — no existía en ningún sitio hasta ahora (los tipos
+solo se usaban para el degradado de color), y era necesario para poder mostrar el caso
+que disparó todo esto (Clefairy Normal→Hada).
+
+**Backend** (`PokemonFichaAssembler::assemble()`): nueva clave `versionMeta` —
+`{[version]: {versionGroup, generation}}` — resuelta sin ninguna llamada nueva a PokeAPI.
+
+**Frontend** (`pokemonFicha.js`): `evolutionStages()`/`moveLearnMethod()` ganan un
+parámetro `versionGroup` opcional (sin él, comportamiento idéntico a antes — el selector
+es 100% opt-in); nuevo `movesForVersionGroup()` filtra la lista de movimientos por juego;
+`resolvePastTypes()` (reemplazo completo del array de tipos, `past_types` es "hasta esta
+generación inclusive") y `resolvePastBySlot()` (override PARCIAL por slot — `past_abilities`/
+`past_stats` solo listan lo que cambió respecto al valor actual, no la lista completa —
+diferencia real verificada con datos: `past_types` de Clefairy trae el array completo,
+`past_abilities` solo el slot que cambiaba) para habilidades/stats por generación.
+`resolveHistoricalStats()` maneja aparte el caso gen I (esquema de 5 stats, no 6 —
+`StatRadarChart` gana props `order`/`labels` opcionales para poder pintarlo).
+
+**Bug real encontrado durante la verificación manual** (contrastando la lógica a mano
+contra el payload real de Clefairy antes de darlo por bueno): antes de gen III las
+habilidades no existen como mecánica en absoluto, pero `past_abilities` solo registra
+CAMBIOS respecto al valor actual — un slot que nunca cambió (el 1º de Clefairy, siempre
+`cute-charm`) no aparece ahí, así que el override por slot solo no bastaba. Hizo falta un
+corte aparte y explícito (`generation < 3` → sin habilidades) en
+`PokemonFichaPage.jsx`, independiente de lo que diga el histórico de cada slot.
+
+### Segundo bug, reportado por David tras probarlo: Legends Z-A y luego Escarlata/Púrpura no aparecían para Pokémon confirmados en esos juegos
+
+El selector (heredado del picker de DESC que ya existía) usaba `species.flavor_text_entries`
+como único criterio de "qué juegos ofrecer". Investigado con PokeAPI EN VIVO (no solo
+nuestra caché, para descartar que fuera un problema de caché desactualizada — la nuestra
+tenía solo una semana): confirmado con `curl`+`python3` directo contra
+`pokeapi.co/api/v2/pokemon-species/pikachu` que Pikachu no tiene NINGUNA entrada de
+`flavor_text_entries` para `scarlet`/`violet` en ningún idioma, pese a tener nº 74 en la
+Pokédex de Paldea (`pokedex_numbers`) — confirmado que sí está en el juego. Comparado
+contra los iniciales de Paldea (Sprigatito/Fuecoco/Quaxly, que sí tienen texto S/V): el
+hueco es específico de Pokémon "veteranos" que vuelven vía Pokémon Home, no de
+Escarlata/Púrpura en general — **PokeAPI (mantenida por voluntarios) lleva 4 años sin
+transcribir el texto de Pokédex de S/V para la mayoría de Pokémon no nativos de Paldea**,
+aunque sí tiene completos tanto la numeración de Pokédex (extraída del juego, fiable)
+como los movimientos (`scarlet-violet` sí aparece en `version_group_details` de
+Thunderbolt de Pikachu, comprobado). Legends Z-A es un caso más extremo de lo mismo pero
+más recientre: ni siquiera tiene movimientos volcados todavía
+(`version-group.move_learn_methods: []`).
+
+**Corrección**: nuevo `PokeApiResourceCacheRepository::findVersionGroupCatalog()`
+(mismo estilo SQL que `findPokedexBrowserCatalog`) cataloga los 32 `version-group`
+cacheados con generación/Pokédex/versiones. `resolveVersionMeta()` del assembler pasa de
+depender solo de `flavor_text_entries` a cruzar `species.pokedex_numbers` contra las
+Pokédex de cada `version-group` (criterio principal, más fiable) — se mantiene
+`flavor_text_entries` como unión de respaldo, no sustitución. Confirmado con David (vía
+pregunta explícita) el criterio de UX para juegos con hueco de datos: el juego SÍ aparece
+en el selector aunque falten movimientos/descripción, cada sección muestra su propio
+aviso de "sin datos para este juego" en vez de esconder el juego (nueva clave
+`ficha.noMovesInGame`, ya existía el patrón para `noAbilitiesInGame`). Resultado para
+Pikachu: de 33 a 46 juegos en el selector.
+
+**Fix adicional necesario en el frontend por el mismo motivo**: `activeVersion` de DESC
+hacía `?? versions[0]` como fallback SIEMPRE, incluso cuando el usuario ya había elegido
+explícitamente un juego sin texto propio — mostraba la descripción de OTRO juego en vez
+de decir "no disponible para este". Se cambia a que el fallback a `versions[0]` solo
+aplique cuando `selectedVersion` sigue siendo `null` (nada elegido todavía); el resaltado
+visual del chip activo se desacopla en `highlightedVersion` (ya no puede depender de
+`activeVersion`, que ahora puede quedarse `undefined` a propósito).
+
+**Verificado**: `oxlint` 0 errores, Vite/HMR compilando limpio (un error de parseo
+transitorio visto en el log era de un estado intermedio entre dos ediciones, confirmado
+resuelto forzando una retransformación). Contrastado por curl contra el backend real
+(`/api/pokemon/clefairy/ficha`, `/api/pokemon/bulbasaur/ficha`, `/api/pokemon/pikachu/ficha`)
+y a mano contra PokeAPI en vivo para el segundo bug. **No visto a ojo en el navegador**
+(sin `claude-in-chrome` conectado esta sesión) — pendiente de que David lo pruebe,
+especialmente el selector global recién movido fuera de DESC y el caso Legends Z-A/S-V.
+
+### Tercer bug, reportado por David la sesión siguiente: formas/variantes heredaban juegos de generaciones anteriores a su propia introducción — HECHO 2026-08-24
+
+David no quedó convencido tras probarlo: "el juego solo debería mostrarse si ese
+Pokémon está en el juego". Diagnosticado con curl+SQL directo contra la caché real:
+`resolveVersionMeta()` cruza `species.pokedex_numbers`, que es un dato a **nivel de
+especie** — no distingue variante/forma. Raichu (base) y Raichu-Alola comparten la
+misma entrada de Pokédex de Kanto, así que la ficha de `raichu-alola` ofrecía 46
+juegos, incluidos Rojo/Azul/Amarillo (generación I, donde Alola ni existía como
+región) y Diamante/Perla/Platino. Confirmado con curl antes de tocar nada.
+
+**Fix**: nuevo suelo de generación por variante, sacado de `pokemon.forms[0]` →
+`pokemon-form.version_group` (dato ya cacheado, verificado que existe tanto para
+formas alternativas como para la forma por defecto de cualquier especie — ej.
+`raichu-alola`→`sun-moon`, `charizard-mega-x`→`x-y`, `pikachu`→`red-green-japan`).
+`resolveVersionMeta()` gana un segundo parámetro (`$pokemonPayload`, la variante
+concreta pedida, no solo `$speciesPayload`) y una nueva `resolveVarietyMinGeneration()`;
+cualquier `version-group` de generación anterior a la de introducción de la forma se
+descarta del cruce por Pokédex, aunque coincidiera. **Elegido explícitamente sobre la
+alternativa más estricta** (limitar a solo el version-group exacto de introducción,
+ej. Raichu-Alola solo en sun-moon) — David prefirió el suelo de generación para no
+ocultar apariciones reales posteriores (ultra-sun-ultra-moon, DLC de espada/escudo).
+Si la `pokemon-form` de la variante no está cacheada, no se aplica ningún suelo (fail
+open, mismo comportamiento que antes — nunca oculta de más por un hueco de caché).
+
+**No es 100% preciso** (no distingue si una forma regional reaparece de verdad en un
+remake concreto de generación posterior o no — ej. Raichu-Alola con el suelo puesto en
+gen VII sigue apareciendo en Diamante Brillante/Perla Reluciente porque ambos comparten
+nombre de Pokédex `original-sinnoh` con la generación IV y BDSP es gen VIII, aunque no
+está confirmado que Raichu-Alola sea obtenible de verdad ahí) pero elimina el caso
+claramente roto. David avisado del límite.
+
+**Verificado por curl** contra el backend real: `raichu-alola` pasa de 46 a 19 juegos
+(todos gen VII+, ya no aparecen Rojo/Azul/Diamante/Perla/Platino),
+`charizard-mega-x` a 14 juegos (todos gen VI+, arranca en X/Y como corresponde),
+`pikachu` (forma por defecto) y `sprigatito` (especie nueva de gen IX) sin cambios —
+confirma que el suelo no afecta a formas por defecto ni a especies nuevas, donde el
+cruce por Pokédex ya era correcto. `php -l` sin errores de sintaxis. **No visto a ojo
+en el navegador** — mismo hueco de `claude-in-chrome` de siempre, pendiente de que
+David lo pruebe con una forma regional/mega real en la UI.
+
+### Cuarto bug, reportado por David con un ejemplo concreto (Golbat/Legends Z-A) — HECHO 2026-08-24
+
+David comparó contra `wikidex.net/wiki/Golbat`, que sí tiene entrada de Pokédex para
+Legends Z-A, mientras que la ficha mostraba "Descripción no disponible — cachea
+pokemon-species" (mensaje genérico, engañoso: el problema no era falta de caché de
+`pokemon-species`). Dos causas independientes, ambas corregidas:
+
+1. **Bug de código** en `flavorTextsByVersion()` (`frontend/src/utils/pokemonFicha.js`):
+   el `Map` `textByVersion` se sembraba ÚNICAMENTE desde `species.flavor_text_entries`
+   (PokeAPI); el fallback de WikiDex solo se consultaba dentro del `for` que recorre
+   ese mismo Map. Si PokeAPI no tenía **ninguna** entrada para un juego (confirmado con
+   SQL: el payload de Golbat no trae flavor_text_entries de `legends-za` en ningún
+   idioma), el fallback de WikiDex nunca se llegaba a mirar aunque existiera. Arreglado
+   añadiendo una pasada previa que crea una entrada vacía en el Map para cada versión
+   presente solo en `wikidexFlavorText` — así entra en el bucle igual que las que sí
+   tienen datos de PokeAPI.
+2. **Dato vacío en esta base de datos**: `wikidex_flavor_text` y `wikidex_effect_text`
+   estaban a **0 filas** pese a que la memoria decía "HECHO 2026-08-17" — probablemente
+   por un rebuild de contenedores/BD sin reimportar después. Reimportado con
+   `bash scripts/import_wikidex.sh` (1025 especies cruzadas, 16943 filas) +
+   `app:wikidex:import-effects` directo (1658 habilidades/movimientos cruzados) — los
+   dumps fuente (`scripts/wikidex_dump/wikidex.sqlite`, `wikidex_export_*.py`) seguían
+   en disco, reimportar fue solo re-ejecutar los comandos ya existentes, no hizo falta
+   tocar el parser ni el scraper.
+
+**Why importante:** con las dos causas activas a la vez, ninguna de las dos por
+separado explicaba el síntoma completo — con la tabla vacía, arreglar solo el código
+seguía sin mostrar nada; con datos pero el bug de código sin arreglar, un juego sin
+NINGUNA entrada de PokeAPI seguía sin poder usar WikiDex nunca. **Si en el futuro
+aparece otro caso de "wikidex debería cubrir esto pero no aparece", revisar primero si
+`wikidex_flavor_text`/`wikidex_effect_text` tienen filas de verdad** (`SELECT COUNT(*)`)
+antes de asumir que es un bug de cruce — un rebuild de la BD sin reimportar es la causa
+más probable, no un fallo del parser.
+
+**Verificado por curl**: `wikidex_flavor_text` (16943 filas)/`wikidex_effect_text`
+(1658 filas) pobladas; `GET /api/pokemon/golbat/ficha` devuelve
+`wikidexFlavorText['legends-za']` con el texto real en español. `oxlint` 0
+errores/warnings en los 2 archivos tocados, Vite sirve ambos módulos 200 sin
+`PARSE_ERROR`. **No visto a ojo en el navegador** — mismo hueco de `claude-in-chrome`
+de siempre, pendiente de que David confirme que la pestaña DESC de Golbat con
+Legends Z-A seleccionado ya muestra el texto.
+
+### Quinto pedido, misma sesión: ocultar DLC y ediciones Japan del selector de juego — HECHO 2026-08-24
+
+David pidió explícitamente que ni los DLC (ej. `the-crown-tundra`) ni las ediciones
+japonesas originales de Gen I aparezcan como opción propia en el selector de juego de
+la ficha — los DLC deben "contar como" el juego base al que pertenecen, las ediciones
+Japan deben desaparecer sin más (ya cubiertas por la versión USA/Europe, misma
+Pokédex `kanto`).
+
+**Casos ambiguos resueltos con pregunta explícita a David** (la cache tiene 32
+version-group, no todos encajan limpio en "DLC" vs "juego normal"):
+- `mega-dimension` (nombre sin prefijo "Legends Z-A:", pokédex propia `hyperspace`,
+  subconjunto de las pokédex de `legends-za`) → confirmado DLC de `legends-za`.
+- `champions` (nombre "Champions", pokédex propia `champions`, sin relación aparente
+  con ningún juego base cacheado — probablemente un spin-off de combates
+  independiente, no contenido descargable) → David: "solo se incluyen juegos
+  tradicionales... champions no es necesario incluirlo" — **excluido del todo**, ni
+  cuenta como DLC de nada ni aparece como juego propio.
+
+**Backend** (`PokemonFichaAssembler.php`): dos constantes nuevas junto a
+`ROMAN_GENERATIONS` (mismo criterio de tabla cerrada a mano — dominio pequeño, de
+crecimiento lento, no vale la pena inferirlo por heurística):
+- `DLC_PARENT_VERSION_GROUPS`: `the-isle-of-armor`/`the-crown-tundra` → `sword-shield`,
+  `the-teal-mask`/`the-indigo-disk` → `scarlet-violet`, `mega-dimension` → `legends-za`.
+- `EXCLUDED_VERSION_GROUPS`: `red-green-japan`, `blue-japan`, `champions` — nunca se
+  pliegan sobre nada, simplemente no cuentan.
+
+`resolveVersionMeta()` reescrito a **dos pasadas**: 1ª pasada resuelve los
+version-group "normales" (ni DLC ni excluidos) exactamente como antes; 2ª pasada
+recorre solo los DLC y, si el DLC coincide (por Pokédex o flavor_text) y el juego
+BASE no quedó ya cubierto en la 1ª pasada, añade las versiones del juego base —
+**pero atribuyéndoles el `versionGroup` del propio DLC, no el del juego base**: el
+dato real de movimientos/evolución de un Pokémon exclusivo de DLC está etiquetado en
+el payload con el `version_group` del DLC (ej. `the-crown-tundra`), no con el del
+juego base (`sword-shield`); atribuir el del juego base habría dejado el filtrado de
+movimientos vacío para esos casos. Si el juego base ya coincidía por sí mismo en la
+1ª pasada (caso más común — comprobado con Golbat: SÍ tiene flavor_text_entries
+directas de `sword`/`shield`, no solo de `the-crown-tundra-sword`/`shield`), esa
+entrada gana y el DLC no la pisa. El suelo de generación por variante (sección
+anterior) se sigue aplicando igual en ambas pasadas.
+
+**Verificado por curl**: ningún Pokémon probado (`golbat`, `pikachu`, `regirock`,
+`raichu-alola`, `charizard-mega-x`, `bulbasaur`, `sprigatito`) muestra ya
+`red-japan`/`green-japan`/`blue-japan`, `the-crown-tundra-*`/`the-isle-of-armor-*`/
+`the-teal-mask-*`/`the-indigo-disk-*`, `champions` ni `mega-dimension` como entradas
+propias del selector — `sword`/`shield`/`scarlet`/`violet`/`legends-za` los siguen
+cubriendo. No se encontró en la caché actual ningún Pokémon que dependa de verdad del
+plegado por Pokédex-sin-flavor-text (todos los casos con Pokédex de Corona
+Nevada/Isla Armadura ya tenían también flavor_text directo de sword/shield) — la ruta
+de plegado por Pokédex queda como red de seguridad verificada por lógica, no por un
+caso real observado; si aparece alguno real, revisar que `versionGroup` salga
+`the-crown-tundra`/`the-isle-of-armor`/etc. y no `sword-shield`. `php -l` sin errores.
+**No visto a ojo en el navegador** — mismo hueco de `claude-in-chrome` de siempre.
+
+## Descripción propia de Megaevolución/Gigamax desde WikiDex — HECHO 2026-08-24
+
+David preguntó si las fichas de mega/gigamax muestran contenido propio o el del
+Pokémon base. Confirmado por API: tipos/stats/habilidades/altura/peso SÍ son propios
+de la variante (vienen de `pokemon.*`, ya correcto de antes), pero la descripción de
+Pokédex (DESC) es la de la especie compartida — **correcto según el propio juego**
+(ni Game Freak escribe una entrada de Pokédex distinta para una mega, PokeAPI
+tampoco la tiene). David pidió entonces que, **al menos para estas formas**, la
+descripción priorice lo que ofrezca WikiDex (con fallback a PokeAPI) — porque WikiDex
+SÍ tiene prosa propia de cada mega/gmax (aspecto, cómo cambia al transformarse), en
+secciones aparte de la Pokédex por juego de la misma página de especie (confirmado
+leyendo el wikitext de Charizard/Absol/Mewtwo/Venusaur/Gengar/Raichu/Eevee/
+Blastoise/Pikachu antes de escribir el parser).
+
+**Estructura real en wikitext** (WikiDex, no PokeAPI): encabezado `=== Mega-<Especie>
+===` (nivel 3, o 4 en páginas con más subsecciones antes, ej. Pikachu) con prosa
+directa si solo hay una mega (Venusaur, Gengar) o viñetas `* '''Mega-<Especie>
+<Letra>''' (anotación en inglés/japonés) prosa` si hay varias (X/Y, o X/Y/Z cuando
+incluye la letra Z del DLC "Megadimensión" de Leyendas Z-A — mismo DLC que ya se
+pliega en el selector de juego, ver sección anterior); encabezado `=== <Especie>
+Gigamax ===` para la forma Gigamax, siempre prosa directa. Cada bloque termina en el
+siguiente encabezado de su nivel o superior, o en la tabla `{| class="evolucion"`.
+**Trampa real encontrada**: la sección `== Características de combate ==`, mucho más
+abajo en la página, REPITE encabezados `=== Mega-<Especie> <Letra> ===` para tablas
+de stats sin prosa real (ej. "Las características de Mega-Raichu X son:" antes de una
+plantilla `{{Características|...}}`) — coincide con el mismo patrón de encabezado
+pero no es descripción. Se descarta con un umbral de longitud de 150 caracteres tras
+limpiar el wikitext (verificado: la basura de esa sección limpia a 40-44 caracteres,
+la entrada real más corta de las 125 encontradas en el dump son 299 — margen amplio,
+no ajustado a ojo).
+
+**Cobertura verificada exhaustivamente ANTES de escribir el pipeline completo**
+(spike en Python suelto contra el dump, sin tocar el backend todavía): 121/121
+variantes mega/gmax ya cacheadas en este proyecto tienen su descripción extraída
+correctamente por el parser, cruzando cada una contra su `pokemon-species` +
+`pokemon` real en la caché — el porqué de invertir tiempo en esto antes de escribir
+PHP: evitar construir toda la tubería (entidad, migración, comando, integración
+frontend) sobre un parser sin validar.
+
+**Implementado**:
+- `scripts/wikidex_parser.py`: `parse_variety_descriptions(wikitext)` — wikitext de
+  una página de especie -> dict `forma -> texto` (`mega`/`mega-x`/`mega-y`/`mega-z`/
+  `gmax`). Reutiliza `clean_wikitext()` ya existente, no reinventa limpieza de
+  wikitexto.
+- `scripts/wikidex_export_variety_descriptions.py`: mismo patrón que
+  `wikidex_export_flavor_text.py` (Python solo extrae texto por título+forma, no ve
+  nada de PokeAPI) -> `backend/var/wikidex_import/variety_descriptions.json`.
+- Entidad nueva `WikidexVarietyFlavorText` (tabla `wikidex_variety_flavor_text`,
+  migración `Version20260824091702`) — a diferencia de `WikidexFlavorText` (indexada
+  por especie+versión de juego), esta se indexa DIRECTAMENTE por el nombre de la
+  variante `pokemon` de PokeAPI (ej. `charizard-mega-x`), porque WikiDex no varía
+  esta descripción por juego, solo por forma.
+- `PokeApiResourceCacheRepository::findNamesById()` nuevo (resourceId -> `name`,
+  sin payload, mismo criterio de ligereza que `findFetchedAtByType`) — hace falta
+  para reconstruir el slug base de la especie y comprobar qué variantes están
+  cacheadas de verdad.
+- Comando `app:wikidex:import-varieties` (`WikidexImportVarietiesCommand`): cruza
+  título WikiDex -> `pokemon-species` (mismo cruce por nombre 'es' que el import de
+  flavor text) -> slug base -> `<slug>-<forma>`, y solo escribe si esa variante
+  `pokemon` está realmente cacheada (si no, se cuenta aparte, no es error — esa
+  variante en concreto no se ha cacheado todavía). Ejecutado: **121 filas escritas**,
+  0 títulos sin especie, 4 formas sin esa variante cacheada todavía
+  (`meowstic-mega`, `toxtricity-gmax`, `urshifu-gmax`, `tatsugiri-mega` — estas 4
+  especies tienen formas regionales/de género propias en PokeAPI, ej.
+  `toxtricity-amped-gmax`/`toxtricity-low-key-gmax`, no `toxtricity-gmax` a secas; el
+  patrón simple `<slug>-<forma>` no cubre esos 4 casos, gap conocido y aceptado, no
+  bloqueante).
+- `PokemonFichaAssembler::assemble()`: nueva clave `wikidexVarietyFlavorText`
+  (`WikidexVarietyFlavorTextRepository::findTextByPokemonName($payload['name'])`,
+  `null` para formas base y variantes sin página parseada).
+- `scripts/import_wikidex.sh`: ahora también exporta+importa este dato (2 pasos
+  nuevos al final), para que la próxima vez que haga falta reimportar todo (ver
+  bug anterior de esta misma sesión, tablas vacías por rebuild de BD) no se olvide
+  este paso.
+- Frontend (`PokemonFichaPage.jsx`, sección DESC): si `wikidexVarietyFlavorText`
+  existe, se muestra ese texto (etiqueta de fuente "WikiDex" en vez del nombre de
+  juego, sin selector de versión — no varía por juego) en vez del panel de
+  `activeVersion` de siempre; si no existe (forma base, o variante sin página
+  parseada), cae al comportamiento de siempre sin cambios. Nueva clave i18n
+  `ficha.descVarietySource` (es/en: "WikiDex").
+
+**Verificado por curl**: `charizard-gmax`/`absol-mega`/`absol-mega-z`/
+`venusaur-mega`/`raichu-mega-x` devuelven su texto propio; `charizard` (forma base)
+devuelve `null` y sigue con el comportamiento de siempre. `php -l` sin errores en los
+4 archivos PHP nuevos/tocados, `oxlint` 0 errores/warnings en el frontend, Vite
+compila limpio. **No visto a ojo en el navegador** — mismo hueco de `claude-in-chrome`
+de siempre, pendiente de que David confirme visualmente el panel DESC de una mega
+(ej. `/ficha/charizard-mega-x`).

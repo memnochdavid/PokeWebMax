@@ -502,6 +502,101 @@ def parse_effect(wikitext, variant="es"):
     return cleaned or None
 
 
+# --- Descripciones propias de variantes Mega/Gigamax ---------------------------------
+#
+# A diferencia del resto del parser (indexado por `version` de juego), esto es
+# indexado por FORMA — la ficha de especie de WikiDex (ej. "Charizard") incluye, en
+# secciones aparte de la Pokédex por juego, una prosa descriptiva propia de cada
+# Megaevolución/Gigamax (aspecto, cómo cambia al transformarse...) que PokeAPI no
+# tiene en absoluto para variantes (comparte la descripción de la especie base para
+# todas sus variantes, ver .claude/memory/project_pokewebmax_progress.md). Pedido por
+# David 2026-08-24: para estas formas, priorizar este texto sobre el de PokeAPI.
+#
+# Estructura real en wikitext (confirmada con Charizard/Absol/Mewtwo/Venusaur/Gengar/
+# Raichu/Eevee/Blastoise/Pikachu, cobertura 121/121 variantes mega/gmax ya cacheadas
+# en este proyecto verificada por script antes de escribir esto en el código):
+# - Encabezado "=== Mega-<Especie> ===" (nivel 3, o nivel 4 en páginas con más
+#   subsecciones previas, ej. Pikachu) seguido de:
+#   - Un único Pokémon puede megaevolucionar: prosa directa, sin viñetas (ej. Venusaur,
+#     Gengar, Absol en su forma base).
+#   - Varias formas (X/Y, o X/Y + una Z de "Megadimensión", el DLC de Leyendas Z-A ya
+#     tratado en PokemonFichaAssembler): viñetas `* '''Mega-<Especie> <Letra>''' (...)
+#     prosa`, una por forma.
+# - Encabezado "=== <Especie> Gigamax ===" (mismo patrón de nivel), siempre prosa
+#   directa sin viñetas (una única forma Gigamax por especie).
+# - Cada bloque termina en la siguiente cabecera de su mismo nivel o superior, o en la
+#   tabla `{| class="evolucion"` que seguro pasa a continuación — lo que venga antes.
+#
+# **Trampa real encontrada y evitada**: la sección "== Características de combate =="
+# (mucho más abajo en la página) repite encabezados "=== Mega-<Especie> <Letra> ==="
+# para las tablas de stats (ej. "=== Mega-Raichu X ===" con una plantilla
+# {{Características|...}} debajo, sin ninguna prosa) — coincide con el mismo patrón de
+# encabezado pero no lleva descripción real. Se descarta con un umbral de longitud
+# (`_MIN_VARIETY_TEXT_LENGTH`): verificado que las entradas basura de esa sección
+# limpian a 40-44 caracteres ("Las características de Mega-Raichu X son:") mientras
+# que la entrada real más corta de las 125 encontradas en el dump son 299 caracteres —
+# margen amplio, no es un umbral ajustado a ojo.
+_VARIETY_ANNOTATION_RE = re.compile(r"\(\s*'''''.*?en inglés.*?en japonés.*?\)", re.DOTALL)
+_VARIETY_HEADING_RE = re.compile(r"\n(={2,6})\s*([^=\n]+?)\s*\1\n")
+_VARIETY_MEGA_HEADING_RE = re.compile(r"^Mega-.+$")
+_VARIETY_GMAX_HEADING_RE = re.compile(r".*\bGigamax$")
+_VARIETY_BULLET_RE = re.compile(r"^\*\s*'''(Mega-[^']+?)'''", re.MULTILINE)
+_VARIETY_BULLET_LETTER_RE = re.compile(r"^Mega-.+?\s+([XYZ])$")
+_MIN_VARIETY_TEXT_LENGTH = 150
+
+
+def _variety_section_body(wikitext, start, level):
+    """Texto desde `start` hasta el próximo encabezado de nivel <= `level` o la tabla
+    `{| ...`, lo que aparezca antes — ninguno de los dos es opcional en la práctica
+    (todo bloque de mega/gmax visto en el dump va seguido de la tabla de evolución)."""
+    heading_match = re.search(r"\n={2," + str(level) + r"}[^=]", wikitext[start:])
+    table_match = re.search(r"\n\{\|", wikitext[start:])
+    ends = [m.start() for m in (heading_match, table_match) if m]
+    end = start + min(ends) if ends else len(wikitext)
+    return wikitext[start:end]
+
+
+def parse_variety_descriptions(wikitext):
+    """Wikitext de una página de especie -> dict `forma -> texto` para sus
+    Megaevoluciones/Gigamax. Claves posibles: `mega` (una única mega sin letra),
+    `mega-x`/`mega-y`/`mega-z`, `gmax`. El caller (wikidex_export_variety_descriptions.py)
+    no sabe nada de wikitext, solo recibe este dict ya limpio."""
+    result = {}
+    for heading_match in _VARIETY_HEADING_RE.finditer(wikitext):
+        level = len(heading_match.group(1))
+        heading = heading_match.group(2).strip()
+        is_mega = bool(_VARIETY_MEGA_HEADING_RE.match(heading))
+        is_gmax = bool(_VARIETY_GMAX_HEADING_RE.match(heading))
+        if not is_mega and not is_gmax:
+            continue
+
+        body = _variety_section_body(wikitext, heading_match.end(), level)
+        body = _VARIETY_ANNOTATION_RE.sub("", body)
+        bullets = list(_VARIETY_BULLET_RE.finditer(body))
+
+        if is_gmax:
+            _set_variety_text(result, "gmax", clean_wikitext(body))
+            continue
+        if not bullets:
+            _set_variety_text(result, "mega", clean_wikitext(body))
+            continue
+        for i, bullet_match in enumerate(bullets):
+            letter_match = _VARIETY_BULLET_LETTER_RE.match(bullet_match.group(1).strip())
+            key = f"mega-{letter_match.group(1).lower()}" if letter_match else "mega"
+            segment_start = bullet_match.end()
+            segment_end = bullets[i + 1].start() if i + 1 < len(bullets) else len(body)
+            _set_variety_text(result, key, clean_wikitext(body[segment_start:segment_end]))
+
+    return result
+
+
+def _set_variety_text(result, key, text):
+    # No pisar una entrada ya válida (ver nota de la sección "Características de
+    # combate" arriba) ni aceptar texto demasiado corto para ser una descripción real.
+    if key not in result and len(text) >= _MIN_VARIETY_TEXT_LENGTH:
+        result[key] = text
+
+
 def effect_title_candidates(es_name, es419_name):
     """Títulos de página posibles para una habilidad/movimiento dado su nombre en
     España y en Hispanoamérica (`names[es]`/`names[es-419]` de PokeAPI). Cuando

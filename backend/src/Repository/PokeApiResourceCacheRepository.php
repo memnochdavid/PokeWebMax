@@ -49,6 +49,32 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
     }
 
     /**
+     * Solo `name` (el slug, ej. 'charizard') por resourceId, sin payload — mismo
+     * criterio de ligereza que findFetchedAtByType(). Usado por
+     * WikidexImportVarietiesCommand para, a partir del resourceId de una
+     * `pokemon-species` ya resuelto por nombre en español, reconstruir el slug base y
+     * comprobar qué variantes `<slug>-mega`/`-mega-x`/`-gmax`... están cacheadas.
+     *
+     * @return array<int, string> indexado por resourceId
+     */
+    public function findNamesById(string $resourceType): array
+    {
+        $rows = $this->createQueryBuilder('p')
+            ->select('p.resourceId', 'p.name')
+            ->andWhere('p.resourceType = :type')
+            ->setParameter('type', $resourceType)
+            ->getQuery()
+            ->getArrayResult();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $result[$row['resourceId']] = $row['name'];
+        }
+
+        return $result;
+    }
+
+    /**
      * Solo para resourceType 'pokemon': extrae el array `types` de cada payload sin
      * hidratar el payload completo (~28KB por Pokémon). `JSON_EXTRACT` hace la
      * proyección en la propia consulta SQL, así que PHP solo decodifica el fragmento
@@ -656,6 +682,42 @@ class PokeApiResourceCacheRepository extends ServiceEntityRepository
         }
 
         return ['pokedexes' => $pokedexes, 'versions' => $versions];
+    }
+
+    /**
+     * Todos los `version-group` cacheados (32 en este proyecto), con su generación,
+     * sus Pokédex asociadas y sus juegos individuales — usado por
+     * PokemonFichaAssembler::resolveVersionMeta() para saber en qué juegos aparece un
+     * Pokémon a partir de `species.pokedex_numbers` (dato extraído directamente del
+     * juego, fiable) en vez de depender solo de `species.flavor_text_entries`
+     * (transcrito a mano por voluntarios de PokeAPI, con huecos reales incluso en
+     * juegos de hace años — ver .claude/memory/project_pokewebmax_progress.md).
+     *
+     * @return array<string, array{generation: ?string, pokedexes: string[], versions: string[]}>
+     *         indexado por nombre de version-group; `generation` es el nombre crudo
+     *         ("generation-ix"), la conversión a número la hace el caller.
+     */
+    public function findVersionGroupCatalog(): array
+    {
+        $rows = $this->getEntityManager()->getConnection()->executeQuery(
+            "SELECT name,
+                    JSON_EXTRACT(payload, '$.generation.name') AS generation_name,
+                    JSON_EXTRACT(payload, '$.pokedexes[*].name') AS pokedex_names_json,
+                    JSON_EXTRACT(payload, '$.versions[*].name') AS version_names_json
+             FROM pokeapi_resource_cache
+             WHERE resource_type = 'version-group'"
+        )->fetchAllAssociative();
+
+        $catalog = [];
+        foreach ($rows as $row) {
+            $catalog[$row['name']] = [
+                'generation' => json_decode((string) $row['generation_name']),
+                'pokedexes' => json_decode((string) $row['pokedex_names_json'], true) ?? [],
+                'versions' => json_decode((string) $row['version_names_json'], true) ?? [],
+            ];
+        }
+
+        return $catalog;
     }
 
     /**

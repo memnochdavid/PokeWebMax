@@ -271,6 +271,13 @@
   opacity: 0.85;
 }
 
+.typesRow {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
 .genChip {
   border: 1px solid rgba(255, 255, 255, 0.5);
   background: rgba(0, 0, 0, 0.3);
@@ -592,6 +599,27 @@
    visualmente salvo permitir que el sticky funcione. */
 .collapseInnerSticky {
   overflow: visible;
+}
+
+/* Selector único de juego a nivel de página (antes vivía solo dentro de DESC) — mismo
+   .versionPicker/.versionChip/.versionCover de siempre, con una etiqueta corta delante
+   para dejar claro que ahora condiciona toda la ficha y no solo la descripción. */
+.globalVersionPicker {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 0.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.globalVersionLabel {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.7;
+  white-space: nowrap;
 }
 
 .versionPicker {

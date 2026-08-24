@@ -16,8 +16,8 @@ const SIZE = 300
 const CENTER = SIZE / 2
 const RADIUS = SIZE / 2 - 44
 
-function pointFor(index, value) {
-  const angle = (Math.PI * 2 * index) / STAT_ORDER.length - Math.PI / 2
+function pointFor(index, total, value) {
+  const angle = (Math.PI * 2 * index) / total - Math.PI / 2
   const r = RADIUS * Math.min(value / MAX_STAT, 1)
   return [CENTER + r * Math.cos(angle), CENTER + r * Math.sin(angle)]
 }
@@ -25,9 +25,14 @@ function pointFor(index, value) {
 // `animate`: arranca a escala 0 y "crece" hasta el tamaño real con un ligero rebote
 // (ver PokemonFichaPage, se activa un frame después del montaje) — pedido explícito
 // de David en vez de quedarse estático.
-export default function StatRadarChart({ stats, color, animate = false }) {
+//
+// `order`/`labels`: por defecto el esquema moderno de 6 stats (STAT_ORDER/
+// STAT_LABELS) — se pueden sobrescribir para el esquema de 5 stats de la generación I
+// (LEGACY_STAT_ORDER/LEGACY_STAT_LABELS en pokemonFicha.js, ver
+// resolveHistoricalStats), sin tocar este componente cada vez que cambie el esquema.
+export default function StatRadarChart({ stats, color, animate = false, order = STAT_ORDER, labels = STAT_LABELS }) {
   const byName = Object.fromEntries(stats.map((s) => [s.stat.name, s.base_stat]))
-  const points = STAT_ORDER.map((name, i) => pointFor(i, byName[name] ?? 0))
+  const points = order.map((name, i) => pointFor(i, order.length, byName[name] ?? 0))
   const polygon = points.map((p) => p.join(',')).join(' ')
   const rings = [0.25, 0.5, 0.75, 1]
 
@@ -47,25 +52,25 @@ export default function StatRadarChart({ stats, color, animate = false }) {
       {rings.map((ring) => (
         <polygon
           key={ring}
-          points={STAT_ORDER.map((_, i) => pointFor(i, MAX_STAT * ring).join(',')).join(' ')}
+          points={order.map((_, i) => pointFor(i, order.length, MAX_STAT * ring).join(',')).join(' ')}
           fill="none"
           stroke="currentColor"
           strokeOpacity={0.2}
         />
       ))}
-      {STAT_ORDER.map((_, i) => {
-        const [x, y] = pointFor(i, MAX_STAT)
+      {order.map((_, i) => {
+        const [x, y] = pointFor(i, order.length, MAX_STAT)
         return <line key={i} x1={CENTER} y1={CENTER} x2={x} y2={y} stroke="currentColor" strokeOpacity={0.2} />
       })}
       <polygon points={polygon} fill="currentColor" fillOpacity={0.3} stroke="currentColor" strokeWidth={2} />
       {points.map(([x, y], i) => (
         <circle key={i} cx={x} cy={y} r={4} fill="currentColor" />
       ))}
-      {STAT_ORDER.map((name, i) => {
-        const [x, y] = pointFor(i, MAX_STAT * 1.22)
+      {order.map((name, i) => {
+        const [x, y] = pointFor(i, order.length, MAX_STAT * 1.22)
         return (
           <text key={name} x={x} y={y} textAnchor="middle" dominantBaseline="middle" fontSize={11} fill="currentColor">
-            {STAT_LABELS[name]} {byName[name] ?? 0}
+            {labels[name]} {byName[name] ?? 0}
           </text>
         )
       })}

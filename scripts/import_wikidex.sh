@@ -22,4 +22,12 @@ echo "📥 Importando a MariaDB (wikidex_flavor_text)..."
 docker compose exec backend php -d memory_limit=768M bin/console app:wikidex:import
 
 echo ""
+echo "🐍 Exportando descripciones de Megaevolución/Gigamax..."
+python3 scripts/wikidex_export_variety_descriptions.py
+
+echo ""
+echo "📥 Importando a MariaDB (wikidex_variety_flavor_text)..."
+docker compose exec backend php -d memory_limit=768M bin/console app:wikidex:import-varieties
+
+echo ""
 echo "✅ Importación completa."
