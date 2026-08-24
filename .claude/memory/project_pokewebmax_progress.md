@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Última actualización: 2026-08-17.
+Última actualización: 2026-08-24.
 
 ## Hecho
 
