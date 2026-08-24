@@ -1,6 +1,13 @@
+/* 2 columnas fijas, no `auto-fill` — con `minmax()` el número de columnas depende del
+   ancho real disponible, y en el extremo angosto del panel (`clamp(280px, 24vw,
+   360px)` en PokemonListPage.module.css) no llegaba a caber una segunda columna, así
+   que las 9 generaciones volvían a apilarse en una sola línea cada una (pedido
+   explícito de David 2026-08-24: "no deben ocupar una línea cada uno"). Fijando 2
+   columnas siempre, cada pestaña se encoge (ver `.tab`/`.roman`/`.region`/`.count` más
+   compactos) en vez de reducir el número de columnas. */
 .pager {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 0.4rem;
 }
 
@@ -8,12 +15,14 @@
   cursor: pointer;
   display: flex;
   align-items: baseline;
-  gap: 0.4rem;
+  justify-content: center;
+  gap: 0.3rem;
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 0.4rem;
   background: var(--chassis-900);
   color: var(--text);
-  padding: 0.45rem 0.7rem;
+  padding: 0.4rem 0.5rem;
   transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
@@ -29,19 +38,25 @@
 }
 
 .roman {
+  flex-shrink: 0;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .region {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-body);
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   opacity: 0.85;
 }
 
 .count {
+  flex-shrink: 0;
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   opacity: 0.6;
 }

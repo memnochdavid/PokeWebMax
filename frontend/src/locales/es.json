@@ -79,6 +79,10 @@
     "colMove": "Movimiento"
   },
   "filters": {
+    "title": "Filtros",
+    "pokedexSection": "Pokédex",
+    "categories": "Categorías especiales",
+    "generation": "Generación",
     "searchPlaceholder": "Buscar por nombre…",
     "type1": "Tipo 1",
     "type2": "Tipo 2",

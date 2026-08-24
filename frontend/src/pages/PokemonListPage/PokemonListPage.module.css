@@ -87,28 +87,39 @@
   margin-top: 0.2rem;
 }
 
-/* Grupo derecho de `headerControls` (ver PokemonFilters, que ahora aloja toda la fila —
-   PokedexScopeSelector + esto) — modo de vista y recargar, aparte del selector de
-   Pokédex que ocupa la izquierda de esa fila. */
-.headerControlsRight {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
+/* Limpiar/vista/recargar — pasados como `headerActions` a PokemonFilters, que los
+   coloca en su propia cabecera fija (ver `.header`/`.headerActions` en
+   PokemonFilters.module.css). Icon-only (vista/recargar) pedido explícito de David
+   2026-08-24; "Limpiar" se unió al mismo grupo poco después, al mismo nivel que
+   tabla/tarjetas/recargar en vez de suelto en la fila de chips. */
+.clear {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: var(--error);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.7rem;
+  padding: 0.35rem 0.5rem;
 }
 
 .reload {
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--line);
   border-radius: 0.4rem;
-  padding: 0.55rem 1.1rem;
+  padding: 0.5rem;
   background: var(--chassis-800);
   color: var(--text-h);
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-size: 0.78rem;
   transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.reload svg {
+  width: 1.05rem;
+  height: 1.05rem;
 }
 
 .reload:hover:not(:disabled) {
@@ -204,11 +215,6 @@
   }
 
   .header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .headerControlsRight {
     flex-direction: column;
     align-items: stretch;
   }

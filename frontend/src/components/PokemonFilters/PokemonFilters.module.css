@@ -1,42 +1,84 @@
+/* `min-height: 0` — el panel es un item de `.layout` (grid, `align-items: stretch`,
+   ver PokemonListPage.module.css) que le da un alto real. Sin esto no aceptaría
+   encoger por debajo de su contenido y `.content` nunca llegaría a hacer scroll
+   interno de verdad (mismo motivo que `.resultsColumn`/`.results` ahí). `overflow:
+   hidden` recorta header/content/footer contra el `border-radius`. */
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding: 1rem;
+  min-height: 0;
   background: var(--chassis-900);
   border: 1px solid var(--line);
   border-radius: 0.6rem;
+  overflow: hidden;
 }
 
-/* Fila de controles de la página (selector de Pokédex + modo de vista/recargar) que
-   antes vivía en el header de PokemonListPage, ahora dentro del panel — pedido
-   explícito de David, para que quede junto al resto de controles que acotan qué se ve
-   en la lista, en vez de separado arriba del todo. Separador propio (no solo el `gap`
-   del panel) para distinguirla visualmente del resto de filas, que sí son filtros. */
-.controlsRow {
+.header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
   flex-wrap: wrap;
-  padding-bottom: 0.75rem;
+  padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.heading {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* Única franja que hace scroll — header y footer se quedan fijos siempre. */
+.content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  padding: 1rem;
+}
+
+.divider {
+  height: 1px;
+  flex-shrink: 0;
+  background: var(--line);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sectionLabel {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.68rem;
+  color: var(--text);
+  opacity: 0.7;
 }
 
 .searchRow {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 0.6rem;
 }
 
-.search {
-  flex: 2;
-  min-width: 12rem;
-}
-
-.select {
-  flex: 1;
-  min-width: 8rem;
+.typeRow {
+  display: flex;
+  gap: 0.6rem;
 }
 
 .search,
@@ -51,6 +93,10 @@
   padding: 0.55rem 0.7rem;
 }
 
+.search {
+  width: 100%;
+}
+
 .search::placeholder {
   color: var(--text);
   opacity: 0.6;
@@ -61,28 +107,41 @@
   border-color: var(--signal);
 }
 
-.sortGroup {
+.sortRow {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
-.sortGroup .select {
-  flex: none;
-  min-width: 11rem;
+.sortRow .select {
+  flex: 1;
+  min-width: 0;
 }
 
-.sortGroup .toggle {
-  padding: 0.5rem 0.7rem;
-  font-size: 0.9rem;
-  line-height: 1;
+.sortDirection {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  background: var(--chassis-800);
+  color: var(--text-h);
+  font-size: 0.95rem;
+  transition: border-color 0.15s ease, color 0.15s ease;
 }
 
-.toggleRow {
+.sortDirection:hover {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+.chipsRow {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
   gap: 0.4rem;
 }
 
@@ -96,7 +155,7 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   font-size: 0.7rem;
-  padding: 0.35rem 0.75rem;
+  padding: 0.4rem 0.8rem;
   transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
@@ -110,75 +169,79 @@
   color: var(--signal-contrast);
 }
 
-.evoGroup {
+/* Segmented control — track con fondo propio, no 3 botones sueltos (ver comentario en
+   el JSX). `max-width` para que no se estire a todo el ancho del panel solo porque
+   son 3 dígitos. */
+.stages {
   display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding-left: 0.5rem;
-  margin-left: 0.2rem;
-  border-left: 1px solid var(--line);
+  gap: 0.25rem;
+  max-width: 12rem;
+  padding: 0.25rem;
+  background: var(--chassis-800);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
 }
 
-.evoLabel {
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-size: 0.68rem;
-  color: var(--text);
-  opacity: 0.7;
-  margin-right: 0.15rem;
-}
-
-.evoGroup .toggle {
-  padding: 0.35rem 0.6rem;
-}
-
-/* Mismo separador que `.evoGroup` (borde izquierdo + hueco) — pedido explícito de
-   David 2026-08-24, para que el pager de generación se distinga del resto de toggles
-   en la misma línea igual que ya se distingue el grupo de Etapas. */
-.pagerGroup {
-  padding-left: 0.5rem;
-  margin-left: 0.2rem;
-  border-left: 1px solid var(--line);
-}
-
-.clear {
+.stage {
   cursor: pointer;
+  flex: 1;
   border: none;
+  border-radius: 0.35rem;
   background: transparent;
-  color: var(--error);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  padding: 0.4rem 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.stage:hover {
+  color: var(--text-h);
+}
+
+.stageActive {
+  background: var(--signal);
+  color: var(--signal-contrast);
+}
+
+.footer {
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0.7rem 1rem;
+  border-top: 1px solid var(--line);
+  background: var(--chassis-900);
+}
+
+.resultPill {
   font-family: var(--font-mono);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  font-size: 0.7rem;
-  padding: 0.35rem 0.5rem;
-  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--text-h);
+  background: var(--chassis-800);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
 }
 
-.resultCount {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  color: var(--text);
-  opacity: 0.75;
+/* En este breakpoint `.layout` (PokemonListPage.module.css) deja de estirar el panel
+   a un alto fijo (pasa a `min-height: auto`) — el scroll interno de `.content` ya no
+   tiene un contenedor de alto acotado contra el que funcionar, así que se desactiva
+   explícitamente y la página vuelve a hacer scroll normal de arriba a abajo. */
+@media (max-width: 900px) {
+  .panel {
+    min-height: auto;
+  }
+
+  .content {
+    flex: none;
+    overflow: visible;
+  }
 }
 
 @media (max-width: 600px) {
-  .searchRow {
+  .typeRow {
     flex-direction: column;
-  }
-
-  .search,
-  .select {
-    width: 100%;
-  }
-
-  .sortGroup {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .sortGroup .select {
-    width: 100%;
   }
 }

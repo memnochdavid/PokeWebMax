@@ -19,6 +19,37 @@ import styles from './PokemonListPage.module.css'
 
 const VIEW_MODES = ['grid', 'table']
 
+// Icon-only — pedido explícito de David 2026-08-24: tarjetas/tabla y recargar pasan de
+// texto a icono, para caber en la cabecera fija de PokemonFilters (`headerActions`)
+// junto a "Limpiar", en vez de una fila de texto aparte. Mismo estilo trazado (stroke,
+// sin relleno) que el placeholder de ItemCard.jsx, no hay un set de iconos compartido
+// en el proyecto.
+const GridIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3.5" y="3.5" width="7" height="7" rx="1" />
+    <rect x="13.5" y="3.5" width="7" height="7" rx="1" />
+    <rect x="13.5" y="13.5" width="7" height="7" rx="1" />
+    <rect x="3.5" y="13.5" width="7" height="7" rx="1" />
+  </svg>
+)
+
+const TableIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3.5" y="4.5" width="17" height="15" rx="1.5" />
+    <line x1="3.5" y1="9.5" x2="20.5" y2="9.5" />
+    <line x1="9.5" y1="9.5" x2="9.5" y2="19.5" />
+    <line x1="15" y1="9.5" x2="15" y2="19.5" />
+  </svg>
+)
+
+const ReloadIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polyline points="23 4 23 10 17 10" />
+    <polyline points="1 20 1 14 7 14" />
+    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+  </svg>
+)
+
 export default function PokemonListPage() {
   const { status, pokemon, error, reload } = usePokemonList()
   const { language } = useLanguage()
@@ -102,45 +133,55 @@ export default function PokemonListPage() {
           <PokemonFilters
             filters={filters}
             onSetFilter={setFilter}
-            onReset={resetFilters}
-            filtering={filtering || pokedexFilterActive}
             resultCount={visible.length}
             sortKey={sortKey}
             onSetSortKey={setSortKey}
             sortDirection={sortDirection}
             onToggleSortDirection={toggleSortDirection}
-            headerControls={
+            headerActions={
               <>
-                <PokedexScopeSelector
-                  pokedexScope={pokedexScope}
-                  onSetScope={setPokedexScope}
-                  pokedexRegion={pokedexRegion}
-                  onSetRegion={setPokedexRegion}
-                  pokedexName={pokedexName}
-                  onSetPokedexName={setPokedexName}
-                  pokedexOptionsForRegion={pokedexOptionsForRegion}
-                  versionName={versionName}
-                  onSetVersionName={setVersionName}
-                  hasSiblingVersions={hasSiblingVersions}
-                  exclusiveOnly={exclusiveOnly}
-                  onSetExclusiveOnly={setExclusiveOnly}
-                  catalog={pokedexCatalog}
-                  language={language}
-                />
-                <div className={styles.headerControlsRight}>
-                  <ViewModeToggle
-                    modes={[
-                      { value: 'grid', label: t('list.viewGrid') },
-                      { value: 'table', label: t('list.viewTable') },
-                    ]}
-                    value={viewMode}
-                    onChange={setViewMode}
-                  />
-                  <button type="button" className={styles.reload} onClick={reload} disabled={status === 'loading'}>
-                    {status === 'loading' ? t('list.loading') : t('list.reload')}
+                {(filtering || pokedexFilterActive) && (
+                  <button type="button" className={styles.clear} onClick={resetFilters}>
+                    {t('filters.clear')}
                   </button>
-                </div>
+                )}
+                <ViewModeToggle
+                  modes={[
+                    { value: 'grid', label: t('list.viewGrid'), icon: <GridIcon /> },
+                    { value: 'table', label: t('list.viewTable'), icon: <TableIcon /> },
+                  ]}
+                  value={viewMode}
+                  onChange={setViewMode}
+                />
+                <button
+                  type="button"
+                  className={styles.reload}
+                  onClick={reload}
+                  disabled={status === 'loading'}
+                  title={status === 'loading' ? t('list.loading') : t('list.reload')}
+                  aria-label={status === 'loading' ? t('list.loading') : t('list.reload')}
+                >
+                  <ReloadIcon />
+                </button>
               </>
+            }
+            pokedexSelector={
+              <PokedexScopeSelector
+                pokedexScope={pokedexScope}
+                onSetScope={setPokedexScope}
+                pokedexRegion={pokedexRegion}
+                onSetRegion={setPokedexRegion}
+                pokedexName={pokedexName}
+                onSetPokedexName={setPokedexName}
+                pokedexOptionsForRegion={pokedexOptionsForRegion}
+                versionName={versionName}
+                onSetVersionName={setVersionName}
+                hasSiblingVersions={hasSiblingVersions}
+                exclusiveOnly={exclusiveOnly}
+                onSetExclusiveOnly={setExclusiveOnly}
+                catalog={pokedexCatalog}
+                language={language}
+              />
             }
             generationPager={
               // Pedido explícito de David 2026-08-24: pasa de vivir suelto entre el

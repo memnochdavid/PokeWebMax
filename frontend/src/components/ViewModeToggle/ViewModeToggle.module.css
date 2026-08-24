@@ -7,6 +7,8 @@
 
 .option {
   cursor: pointer;
+  display: flex;
+  align-items: center;
   border: none;
   border-left: 1px solid var(--line);
   background: var(--chassis-800);
@@ -17,6 +19,11 @@
   font-size: 0.72rem;
   padding: 0.55rem 0.8rem;
   transition: background 0.15s ease, color 0.15s ease;
+}
+
+.option svg {
+  width: 1.05rem;
+  height: 1.05rem;
 }
 
 .option:first-child {

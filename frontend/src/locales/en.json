@@ -79,6 +79,10 @@
     "colMove": "Move"
   },
   "filters": {
+    "title": "Filters",
+    "pokedexSection": "Pokédex",
+    "categories": "Special categories",
+    "generation": "Generation",
     "searchPlaceholder": "Search by name…",
     "type1": "Type 1",
     "type2": "Type 2",
