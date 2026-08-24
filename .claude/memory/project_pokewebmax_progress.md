@@ -3061,3 +3061,112 @@ patrón, otra de las 37); `/api/pokemon/bulbasaur/ficha` sin cambios (caso norma
 sigue resolviendo directo); nombre inventado (`totally-fake-name-xyz`) sigue dando
 404 correcto (el fallback no esconde errores reales). `php -l` sin errores en los 3
 archivos tocados.
+
+## Panel de filtros: aprovechar el espacio horizontal + reestructura completa — HECHO 2026-08-24
+
+Sesión larga, arrancó con una captura de David señalando que el panel de filtros
+(columna angosta, ver sección "Panel de filtros + resultados como 2 columnas" arriba)
+desaprovechaba su propio ancho interno: cada grupo caía en su propia línea aunque
+sobrara sitio. Fue evolucionando en varios pasos hasta una reestructura completa del
+componente.
+
+**Paso 1 — ajustes puntuales de `PokemonFilters`/`GenerationPager`:**
+- `.sortGroup` (etiqueta "ORDENAR POR" + select + botón de dirección): antes la
+  etiqueta caía sola en su línea y el `<select>` (min-width fijo de 11rem) dejaba
+  hueco muerto a la derecha. Se forzó `flex: 1 0 100%` (fila propia siempre, mismo
+  criterio que se repitió después en más sitios) + `<select>` con `flex:1` para que
+  llene el ancho sobrante en vez de dejarlo en blanco.
+- `GenerationPager`: de `flex-wrap` (bordes irregulares, "II Johto" más corto que
+  "VIII Galar" dejaba huecos a la derecha) a CSS Grid. **Bug real encontrado dos
+  veces la misma sesión**: primero con `repeat(auto-fill, minmax(8.5rem,1fr))` dentro
+  de un contenedor (`.pagerGroup`) sin ancho definido (flex item sin `flex-grow`) —
+  el navegador no puede resolver cuántas columnas caben sin un ancho de contenedor
+  real, así que colapsaba a 1 sola columna (las 9 generaciones apiladas). Fix
+  intermedio: `.pagerGroup { flex: 1 0 100% }`. Pero en el extremo angosto real del
+  panel (`clamp(280px,...)`, ver `.layout` de `PokemonListPage.module.css`) ni con
+  ancho definido cabían 2 columnas de `minmax(8.5rem,...)` — volvía a verse 1 por
+  línea. **Fix definitivo**: `repeat(2, 1fr)` fijo (no depende del ancho disponible,
+  las pestañas se encogen en vez de reducir columnas) + `.tab`/`.roman`/`.region`/
+  `.count` más compactos (padding/font-size reducidos, `.region` con
+  `text-overflow: ellipsis` por si un nombre de región no cupiera entero). **Lección
+  para el futuro**: en este panel angosto, cualquier grid con `auto-fill`/`auto-fit` +
+  `minmax()` es sospechoso — mejor un nº de columnas fijo con contenido que se
+  encoge, si se necesita que nunca cambie de nº de columnas.
+
+**Paso 2 — iconos + "Limpiar" al nivel del toolbar:**
+David pidió que Tarjetas/Tabla/Recargar fueran iconos (para ganar sitio) y que
+vivieran por encima de los selects de Pokédex. `ViewModeToggle` ganó soporte opcional
+de `icon` por modo (si se pasa, botón icon-only con `title`/`aria-label` desde
+`label`; si no, sigue mostrando texto — así `ItemsListPage`, que tiene de sobra
+espacio, no se tocó). 3 iconos SVG nuevos en `PokemonListPage.jsx` (`GridIcon`/
+`TableIcon`/`ReloadIcon`, mismo estilo trazado que el placeholder de `ItemCard.jsx` —
+no hay un set de iconos compartido en el proyecto). Poco después, "Limpiar" (que
+vivía suelto en la fila de chips) se unió a este mismo grupo, al mismo nivel que
+vista/recargar.
+
+**Paso 3 — reestructura completa copiando la DISTRIBUCIÓN de un mockup de Stitch
+(Google), no sus colores/tipografía:** David le pidió a Stitch (Google) que
+rediseñara el panel y compartió el HTML resultante (Material Design 3 + Tailwind +
+Inter + Material Symbols). Se le explicó que implementarlo tal cual chocaría con la
+identidad visual ya establecida (chasis/ámbar/mono, ver sección "Rediseño visual
+completo de la UI") y con la regla explícita de "CSS Modules, no Tailwind" de
+`CLAUDE.md` — David confirmó: **copiar solo la distribución de los elementos, no los
+colores ni la tipografía**. Con eso, `PokemonFilters` se reescribió a fondo:
+
+- **Estructura de 3 franjas** en vez de una columna plana: `.header` (fijo, título
+  "Filtros" + `headerActions` = iconos/limpiar), `.content` (única franja que hace
+  scroll — `flex:1; min-height:0; overflow-y:auto`, mismo patrón `flex:1 +
+  min-height:0` ya usado en `.resultsColumn`/`.results` de `PokemonListPage`), `.footer`
+  (fijo, pastilla con el contador de resultados). **Ventaja real, no solo estética**:
+  antes el panel no tenía scroll propio — si su contenido superaba el alto que le
+  daba el grid (`.layout` de `PokemonListPage.module.css`, `align-items:stretch`) se
+  desbordaba en silencio; ahora ese alto se reparte entre las 3 franjas y solo
+  `.content` absorbe el exceso.
+- **Secciones con etiqueta propia** (`.sectionLabel`, mismo estilo mono/mayúsculas
+  que ya tenían "ETAPAS"/"ORDENAR POR"): Pokédex, búsqueda+tipos, ordenar, categorías
+  especiales, etapas, generación — cada filtro ahora se anuncia, con una línea
+  divisoria (`.divider`) solo entre Pokédex→búsqueda y búsqueda→resto (igual que el
+  mockup, que tampoco separaba todo).
+- **Etapas evolutivas**: de 3 píldoras sueltas a un segmented control (un track con
+  fondo, 3 celdas) — comunica mejor "elige una" al ser selección única (con opción de
+  ninguna, se mantiene el comportamiento de toggle-a-null al reclicar la activa).
+- **Footer con contador siempre visible** (antes solo aparecía si había un filtro
+  activo) — idea tomada literalmente del mockup, más informativo que taparlo cuando
+  no hay filtro.
+- **API del componente**: `headerControls` (una sola prop mezclando iconos + selector
+  de Pokédex) se separó en `headerActions` (va a `.header`) y `pokedexSelector` (va a
+  la primera sección de `.content`) — `PokemonListPage.jsx` ahora pasa cada uno donde
+  corresponde. Prop `filtering` se eliminó de `PokemonFilters` (ya no condiciona nada
+  dentro del componente, el footer siempre muestra el contador).
+- Claves de traducción nuevas en `filters.*` (es/en): `title`, `pokedexSection`,
+  `categories`, `generation`.
+- **Aviso técnico dejado pendiente, no bloqueante**: el desplegable de `TypeSelect`
+  (Tipo 1/Tipo 2) es un popover `position:absolute`; al vivir ahora dentro de
+  `.content` (`overflow-y:auto`), en teoría podría recortarse si se abre con el panel
+  scrolleado — en la práctica esos selects están casi arriba del todo, riesgo bajo,
+  no se ha tocado (requeriría portal si algún día molesta de verdad).
+
+**Verificado**: Vite/HMR sin errores tras cada paso (`docker logs pokewebmax_frontend`
+sin `Failed to compile`/`Internal Server Error`), grep de limpieza confirmando que no
+quedaron clases CSS muertas (`.controlsRow`, `.headerControlsRight`, `.evoGroup`,
+`.pagerGroup`, `.toggleRow` — todas del diseño anterior, retiradas). **No verificado a
+ojo en navegador por Claude** (mismo hueco de `claude-in-chrome` de siempre) — David sí
+lo probó en su propio navegador y fue guiando cada iteración con capturas/feedback
+directo en la conversación.
+
+## Migración pendiente sin aplicar → 500 en la ficha — HECHO 2026-08-24
+
+Aparte del trabajo del panel de filtros, David reportó un 500 real en
+`/api/pokemon/skarmory/ficha` (con traza de consola del navegador). Diagnosticado por
+logs del contenedor backend (`docker logs pokewebmax_backend`, nivel `[critical]`):
+`Doctrine\DBAL\Exception\TableNotFoundException` — la tabla `wikidex_variety_flavor_text`
+no existía. Causa: la migración `Version20260824091702` (que crea esa tabla, parte de
+la feature `WikidexVarietyFlavorText` ya documentada más arriba) estaba generada en el
+repo pero nunca se había ejecutado contra la base de datos de este entorno
+(`doctrine:migrations:status` mostraba `Next: Version20260824091702`, 1 migración
+"New"). Arreglado con `docker exec pokewebmax_backend php bin/console
+doctrine:migrations:migrate --no-interaction` (solo crea la tabla nueva, sin tocar
+datos existentes) — verificado con curl, `/api/pokemon/skarmory/ficha` pasa a 200.
+**How to apply**: si esto se repite tras recrear contenedores/volumen de BD desde
+cero, es señal de migraciones pendientes sin más — correr ese mismo comando las pone
+al día, no hace falta investigar de nuevo.

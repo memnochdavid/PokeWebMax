@@ -108,12 +108,12 @@ export default function PokemonListPage() {
 
   return (
     <section className={styles.page}>
-      <div className={styles.header}>
-        <div>
-          <span className="eyebrow">{eyebrow}</span>
-          <h1 className={styles.title}>{t('list.title')}</h1>
-        </div>
-      </div>
+      {/*<div className={styles.header}>*/}
+      {/*  <div>*/}
+      {/*    <span className="eyebrow">{eyebrow}</span>*/}
+      {/*    <h1 className={styles.title}>{t('list.title')}</h1>*/}
+      {/*  </div>*/}
+      {/*</div>*/}
 
       {status === 'error' && <p className={styles.error}>{error}</p>}
 
